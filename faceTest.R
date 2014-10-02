@@ -46,26 +46,34 @@ face.roll<-function(){
 
   company<-c('Insurance A','Insurance B')
   rownames(faceMatrix)<-company[rbinom(1,1,prob=0.5)+1]
-  outputList<-list(faceMatrix, trait, traitName)
+  outputList<-list(faceMatrix, trait-1, traitName)
   return(outputList)
 }
 #**************************************
 # Test case: roll 2 faces and print
 #**************************************
+fileHead<-paste('*****************Test @',Sys.time(),'******************************')
+write(fileHead, "FaceCode.txt", sep="\n",append=T)
 for(i in 1:10){
   face1List<-face.roll() # roll face 1
   face2List<-face.roll() # roll face 2
   if(sum(abs(face1List[[1]]-face2List[[1]]))>=1){ # faces are different
     testFaces<-rbind(face1List[[1]],face2List[[1]]) # row bind two faces in matrix
     Sys.sleep(0.1)
-    faces(testFaces,scale=FALSE,col.nose=terrain.colors(10),print.info=F) # show the faces
+
     #**************************************
     # Output to file
     #**************************************
     fileName<-paste(rownames(face1List[[1]]), paste(face1List[[2]], collapse=""),rownames(face2List[[1]]), paste(face2List[[2]],collapse=""), ".png", collapse="")
     png(filename=fileName,height=600,width=600)
-    faces(testFaces,scale=FALSE,col.nose=terrain.colors(10))
+    faces(testFaces,scale=FALSE,col.nose=terrain.colors(10),print.info=F)
     dev.off()
+    
+    #Output answer sheet
+    detail<-paste(rownames(face1List[[1]]), paste(face1List[[2]], collapse=""),"v.s",rownames(face2List[[1]]), paste(face2List[[2]],collapse=""),collapse="")
+    summary1<-paste('--- Disease 1:',face1List[[2]][1] | face1List[[2]][2],' Disease 2:',face1List[[2]][3] | face1List[[2]][4],'---')
+    summary2<-paste(' Disease 1:',face2List[[2]][1] | face2List[[2]][2],' Disease 2:',face2List[[2]][3] | face2List[[2]][4],'---')
+    write(paste(detail, summary1,summary2), "FaceCode.txt", sep="\n",append=T)
   }
 }
 
