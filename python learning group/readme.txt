@@ -6,3 +6,6 @@ Question: Use one sentence to describe why you want to join this group?
 Current member
 Edward: I want to be a full-stack data scientist.
 Yue: I want to refresh my knowledge in Python and doing it by myself is lonely.
+
+
+* Adding your information here
