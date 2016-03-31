@@ -6,7 +6,7 @@ from scipy import stats
 def t_test(a,mu, alternative='greater', significance=0.05):
     mean_a = np.mean(a)
     stdev_a = np.std(a) # sample std
-    ub_std = stdev_a * np.sqrt(len(a)/(len(a)-1)) # un-biased std from sample
+    ub_std = stdev_a * np.sqrt(float(len(a)/(len(a)-1))) # un-biased std from sample
     se = ub_std/np.sqrt(len(a)) # standard error
     df=float(len(a)-1) # degree of freedom
     t = (mean_a-mu)/se
@@ -24,12 +24,18 @@ def t_test(a,mu, alternative='greater', significance=0.05):
         ci_upper = np.mean(a)+se*ts
     else:
         prob = stats.t.sf(-t, float(df))
-        cv = 1-significance
+        cv = 1-significance # Normal dist  lookup chart
         ts = stats.t.ppf(significance, df)
         ci_lower = np.mean(a)-se*ts
         ci_upper = float("inf")
     return t, cv, prob, ci_lower, ci_upper
 
 x=np.random.normal(2.5,1.5, 64) # mean is 2.5 hours. The sample standard deviation is 1.5 hours. 64 managers
-print(np.mean(x))
-print t_test(x,mu=3, alternative='two-sided')
+#print(np.mean(x))
+#print t_test(x,mu=3, alternative='two-sided')
+#print 5/2
+#print float(5/2)
+#print 5/float(2)
+#print float(5)/2
+print 5/2.0
+print 5.0/2
