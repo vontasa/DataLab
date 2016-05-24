@@ -68,9 +68,11 @@ data$GLD = extend.GLD(data$GLD)
 models = list()
 periodicity = 'years'
 dates = '2003::'
-
-models$classic = couch.potato.strategy(data, 'VIPSX,VTSMX', rep(1/2,2), periodicity, dates)
+# inflation protection + domestic stock
+models$classic = couch.potato.strategy(data, 'VIPSX,VTSMX', rep(1/2,2), periodicity, dates) 
+# inflation protection + domestic stock + international stock
 models$margarita = couch.potato.strategy(data, 'VIPSX,VTSMX,VGTSX', rep(1/3,3), periodicity, dates)
+# S&P + long term treasure + short term treasure + gold 
 models$permanent = couch.potato.strategy(data, 'SPY,TLT,GLD,SHY', rep(1/4,4), periodicity, dates)
 
 #*****************************************************************
