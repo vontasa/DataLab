@@ -1,0 +1,173 @@
+---
+title: "Ayasid Data Challenge"
+author: "Yan Wang"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\usepackage[utf8]{inputenc}
+---
+
+Vignettes are long form documentation commonly included in packages. Because they are part of the distribution of the package, they need to be as compact as possible. The `html_vignette` output type provides a custom style sheet (and tweaks some options) to ensure that the resulting html is as small as possible. The `html_vignette` format:
+
+- Never uses retina figures
+- Has a smaller default figure size
+- Uses a custom CSS stylesheet instead of the default Twitter Bootstrap style
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=5, fig.height=4, echo=FALSE, warning=FALSE, message=FALSE)
+```
+## Data Overview
+First take a first look at the data set.
+
+```{r, echo=FALSE, results='asis'}
+setwd('E:\\my work\\Github\\DataLab\\adsdc')
+library(reshape2)
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(ggfortify)# ggplot PCA plotting
+library(e1071)    # SVM library
+library(randomForest)
+library(DMwR)
+raw<-read.csv("dataset_challenge_one.tsv",sep="\t", header=TRUE)
+knitr::kable(head(raw[,c(1:3,(ncol(raw)-2):ncol(raw))], 5))
+```
+
+### Remove missing value
+Check the completed records and remove the rows with missing value. There are 2 rows contain NA value which is relativly safe to discard.
+```{r include=FALSE}
+sum(!complete.cases(raw))
+df<-raw[complete.cases(raw),]
+nrow(df)
+```
+After removing the missing value, there are 270 completed records for analysis.
+
+### Check the correlation ###
+Looking at the relationship among variables would help to understand the data. The correlation between variables are calculated here. Sometimes the model require the factors are independent from each other, in that case we want to reduce the colinearity by removing highly correlated variables.
+
+```{r}
+var_col<-which(names(df)!="class")    # columns of variables
+class_col<-which(names(df)=="class")  # column of class
+# Overview:: Variable Correlation
+mcor<-cor(df[, var_col])
+melt_mcor<-melt(mcor)
+melt_mcor<-melt_mcor[order(melt_mcor$value),]
+
+# Plot the correlation distribution
+p_histogram_correlation<-ggplot(melt_mcor, aes(x=value)) + 
+  geom_histogram()+
+  labs(x = "Correlation")+
+  ggtitle("Distribution of Attribute Correlation")
+p_histogram_correlation
+```
+According to the distribution of correlation, most of correlations are around 0 and in bell shape. It suggests most of the variables are relatively independent from each other. However there are `r nrow(subset(melt_mcor, value>=0.9 & Var1!=Var2))/2` pair of variables are highly correlated which correlation is >0.9. Probably we would like to take a further look to determine whether they are might be an issue or not. From a general perspective, it looks good since the number is few. 
+
+### Outlier detection
+Local outlier factor (LOF) is used as outlier detection methods. The method defines k nearest neighbors as the locality of a given point. The distance among locality is used to estimate the local density. The points with lower density are more like outliers.
+
+```{r echo=FALSE,results="hide"}
+
+outlier.scores <- lofactor(df[, var_col], k=5)
+plot(density(outlier.scores),main="outlier score distribution")
+outliers <- order(outlier.scores, decreasing=T)[1:10]
+print(outliers)
+labels<-1:nrow(df)
+labels[-outliers] <- "."
+fit <- prcomp(df[,var_col], cor=TRUE)
+outlier_df<-df
+outlier_df$class<-ifelse(labels>=1,-1,outlier_df$class)
+outlier_df$class<-as.factor(outlier_df$class)
+autoplot(fit, data =outlier_df, colour = 'class')
+```
+
+`r outliers` are the top 5 points in outlier detection. Next step, use field knowledge of the data and take a further look at those points, then decide whether to discard.
+
+I am usually very cautious to do outlier detection. Because sometimes it is hard to tell whether an exotic point is a true outlier or just with some valuable information. Only with the good knowledge of variables, outlier detection makes more sense. So here I won't remove those "outliers".
+
+
+## PCA
+```{r echo=FALSE,results="hide"}
+fit <- prcomp(df[,var_col], cor=TRUE)
+summary(fit) # print variance accounted for 
+fit$rotation[,1:2]
+plot(fit,type="lines") # scree plot 
+fit$scores # the principal components
+autoplot(fit, data=df, colour = 'class')
+df.pca<-data.frame((fit$x)[,1:2],class=df[,class_col])
+corr.pca<-cor(df.pca)
+df.pca$class<-as.factor(df.pca$class)
+ggpairs(data= df.pca, mapping=aes(color=class))
+```
+
+### Relationship between variables and class
+```{r echo=FALSE}
+## correaltion between each var and class
+varClassCorr<-sapply(df[,var_col], function(x) cor(x,as.numeric(df$class)))
+top.var<-order(abs(varClassCorr), decreasing = T)[1:10]
+var.sig<-df[,c(order(abs(varClassCorr), decreasing = T)[1:2],class_col)]
+```
+Using correlation between variable and class as the statistics of its significance. 
+```{r echo=FALSE,results="hide"}
+plot(varClassCorr[order(abs(varClassCorr), decreasing = T)[1:10]], main="Top 10 variable correlated to class")
+```
+
+`Variable {r arClassCorr[order(abs(varClassCorr), decreasing = T)[1:2]]}` are the top 2 variable correlated to `class`. The following charts shows the relationship between `Variable {r arClassCorr[order(abs(varClassCorr), decreasing = T)[1:2]]}` and class
+```{r echo=FALSE,results="hide"}
+var.sig$class<-as.factor(var.sig$class)
+ggpairs(data=var.sig,mapping=aes(color=class) )
+```
+
+## Relationship between variables and PC1
+```{r echo=FALSE}
+# correaltion between each var and PC1
+PC1=fit$x[,1]
+varPC1Corr<-sapply(df[,var_col], function(x) cor(x,PC1))
+order(abs(varPC1Corr), decreasing = T)[1:2] # top 2 variable correlated to PC1
+varPC.sig<-cbind(df[,c(order(abs(varPC1Corr), decreasing = T)[1:2])],PC1=PC1) 
+```
+
+```{r echo=FALSE}
+# top 10 variable correlated to PC1
+plot(varPC1Corr[order(abs(varPC1Corr), decreasing = T)[1:10]],main="Top 10 variable correlated to PC1") 
+```
+
+```{r echo=FALSE}
+# relationship between top 2 variable an PC1
+ggpairs(data=varPC.sig)
+```
+
+## Classification
+The data set has more variables than observations. A lot of superivsed learning methods have difficulty to handle high dimentional data which causes serious overfitting. Meanwhile, we are not sure about lineariy of the real system, so most of the linear methods should be rejected. Thus, SVM and random forest is chosen here to do the classifiction. Both of the methods can handle high dimentional data well , especially when variables >> observations. And also random forest is famous for its robustness on different messy data. So it is the one worth trying most of the time.
+
+### SVM
+
+### Random forest
+
+The figure sizes have been customised so that you can easily put two images side-by-side. 
+
+```{r, fig.show='hold'}
+plot(1:10)
+plot(10:1)
+```
+
+You can enable figure captions by `fig_caption: yes` in YAML:
+
+    output:
+      rmarkdown::html_vignette:
+        fig_caption: yes
+
+Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
+
+## More Examples
+
+You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
+
+```{r, echo=FALSE, results='asis'}
+knitr::kable(head(mtcars, 10))
+```
+
+Also a quote using `>`:
+
+> "He who gives up [code] safety for [code] speed deserves neither."
+([via](https://twitter.com/hadleywickham/status/504368538874703872))
