@@ -154,10 +154,16 @@ pred_rf<-predict(rf_model,x)
 table(pred_rf,y) # type I & II
 mean(pred_rf == y) # RF training error
 
-rf_model_test<-predict(rf_model,x.test)
-table(rf_model_test, y.test) # test type I & II
-mean(rf_model_test == y.test) # RF test error
+rf_sub_model<- randomForest(as.factor(class) ~ ., data=cbind(train[,var.sort[1:500]],class=y), importance=TRUE, ntree=2000)
+print(rf_sub_model)
 
+rf_model_test<-predict(rf_model,x.test)
+rf_sub_model_test<-predict(rf_sub_model,x.test)
+
+table(rf_model_test, y.test) # test type I & II
+table(rf_sub_model_test, y.test) # test type I & II
+mean(rf_model_test == y.test) # RF test error
+mean(rf_sub_model_test == y.test)
 
 
 
