@@ -16,6 +16,31 @@ df<-raw[complete.cases(raw),]         # complete records
 var_col<-which(names(df)!="class")    # columns of variables
 class_col<-which(names(df)=="class")  # column of class
 
+# Overview:: Variable Correlation
+mcor<-cor(df[, var_col])
+melt_mcor<-melt(mcor)
+melt_mcor<-melt_mcor[order(melt_mcor$value),]
+
+# Plot the correlation distribution
+p_histogram_correlation<-ggplot(melt_mcor, aes(x=value)) + 
+  geom_histogram()+
+  labs(x = "Correlation")+
+  ggtitle("Distribution of Attribute Correlation")
+p_histogram_correlation
+# The mean is close to 0 and like bell shape which means the selected attributes are not heavily correlated.
+summary(melt_mcor)
+nrow(subset(melt_mcor, value>=0.9 & Var1!=Var2))
+
+
+normaliy<-sapply(x, function(x) shapiro.test(x)$p.value)
+var_norm_df<-data.frame(pvalue=normaliy,dist=ifelse(normaliy>=0.05,"non-normal p>0.05","normal")) 
+p_variable_normality<-ggplot(var_norm_df,aes(x=factor(dist))) + geom_bar() +
+  labs(x = "Distribution")+
+  ggtitle("Count of non-nommal distributed variable")
+p_variable_normality
+
+
+
 # Outlier detection
 outlier.scores <- lofactor(df[, var_col], k=5)
 plot(density(outlier.scores))
@@ -79,24 +104,43 @@ y.test<-test[,"class"]
 # Classifier 1: SVM
 # SVM is good for when # of variables > # of records
 svm_model <- svm(class ~., data=train, type="C-classification",cross=10)
-summary(svm_model)
-svm_pred<-predict(svm_model,x)
-table(svm_pred,y) # training error
-
 svm_test<-predict(svm_model,x.test)
 table(svm_test, y.test)
 mean(svm_test == y.test)
-
 # Tune SVM
 svm_tune <- tune(svm, train.x=x, train.y=y, kernel="radial", ranges=list(cost=10^(-1:2), gamma=c(.5,1,2)))
-print(svm_tune)
 # Using the best cost and gamma to build SVM again
-svm_model_tuned<-svm(class ~., data=train, type="C-classification", kernel="radial", cost=10,gamma=0.5, cross=10)
+svm_model_tuned<-svm(class ~., data=train, type="C-classification", kernel="radial", cost=svm_tune$best.parameters$cost,gamma=svm_tune$best.parameters$gamma, cross=10)
+
+# Order by the class correlation
+var.sort<-order(abs(varClassCorr), decreasing = T)
+best.performance=1
+svm_best_tune = svm_tune
+best.trainSet = train
+for (v in 1:10){
+  trainSet<- train[,var.sort[1:v]]
+  svm_tune <- tune(svm, train.x=trainSet, train.y=y, kernel="radial", ranges=list(cost=10^(-1:2), gamma=c(.5,1,2)))
+  if(svm_tune$best.performance < best.performance){
+    best.performance = svm_tune$best.performance
+    svm_best_tune = svm_tune
+    best.trainSet = trainSet
+  } 
+}
+head(best.trainSet)
+svm_best_tune$best.performance
+svm_best_model<-svm(class ~., data=cbind(best.trainSet, class=y), type="C-classification", kernel="radial", cost=svm_best_tune$best.parameters$cost,gamma=svm_best_tune$best.parameters$gamma, cross=10)
+
+
+summary(svm_model)
 summary(svm_model_tuned)
-svm_pred_tuned<-predict(svm_model_tuned,x)
-table(svm_pred_tuned,y) # traning error
+summary(svm_best_model)
 
 svm_tuned_test<-predict(svm_model_tuned,x.test)
+svm_best_model_test<-predict(svm_best_model,x.test)
+table(svm_best_model_test, y.test)
+mean(svm_best_model_test == y.test)
+
+print(svm_tune)
 table(svm_tuned_test, y.test)
 mean(svm_tuned_test == y.test)
 
@@ -105,8 +149,7 @@ mean(svm_tuned_test == y.test)
 rf_model <- randomForest(as.factor(class) ~ ., data=train, importance=TRUE, ntree=2000)
 plot(rf_model)
 
-importance(fit) # imporatance of each variable
-summary(rf_model)
+print(rf_model)
 pred_rf<-predict(rf_model,x)
 table(pred_rf,y) # type I & II
 mean(pred_rf == y) # RF training error
@@ -115,32 +158,8 @@ rf_model_test<-predict(rf_model,x.test)
 table(rf_model_test, y.test) # test type I & II
 mean(rf_model_test == y.test) # RF test error
 
-# Overview:: Variable Correlation
-mcor<-cor(df[, var_col])
-melt_mcor<-melt(mcor)
-melt_mcor<-melt_mcor[order(melt_mcor$value),]
-
-# Plot the correlation distribution
-p_histogram_correlation<-ggplot(melt_mcor, aes(x=value)) + 
-  geom_histogram()+
-  labs(x = "Correlation")+
-  ggtitle("Distribution of Attribute Correlation")
-p_histogram_correlation
-# The mean is close to 0 and like bell shape which means the selected attributes are not heavily correlated.
-summary(melt_mcor)
-nrow(subset(melt_mcor, value>=0.9 & Var1!=Var2))
 
 
-normaliy<-sapply(x, function(x) shapiro.test(x)$p.value)
-var_norm_df<-data.frame(pvalue=normaliy,dist=ifelse(normaliy>=0.05,"non-normal p>0.05","normal")) 
-head(var_norm_df)
-summary(var_norm_df)
-p_variable_normality<-ggplot(var_norm_df,aes(x=factor(dist))) + geom_bar() +
-  labs(x = "Distribution")+
-  ggtitle("Count of non-nommal distributed variable")
-p_variable_normality
-
-names(normaliy[normaliy>=0.05])
 
 
 

@@ -112,7 +112,7 @@ Using correlation between variable and class as the statistics of its significan
 plot(varClassCorr[order(abs(varClassCorr), decreasing = T)[1:10]], main="Top 10 variable correlated to class")
 ```
 
-`Variable {r arClassCorr[order(abs(varClassCorr), decreasing = T)[1:2]]}` are the top 2 variable correlated to `class`. The following charts shows the relationship between `Variable {r arClassCorr[order(abs(varClassCorr), decreasing = T)[1:2]]}` and class
+Variable `r varClassCorr[order(abs(varClassCorr), decreasing = T)[1:2]]` are the top 2 variable correlated to `class`. The following charts shows the relationship between Variable `r varClassCorr[order(abs(varClassCorr), decreasing = T)[1:2]]` and class
 ```{r echo=FALSE,results="hide"}
 var.sig$class<-as.factor(var.sig$class)
 ggpairs(data=var.sig,mapping=aes(color=class) )
@@ -140,9 +140,117 @@ ggpairs(data=varPC.sig)
 ## Classification
 The data set has more variables than observations. A lot of superivsed learning methods have difficulty to handle high dimentional data which causes serious overfitting. Meanwhile, we are not sure about lineariy of the real system, so most of the linear methods should be rejected. Thus, SVM and random forest is chosen here to do the classifiction. Both of the methods can handle high dimentional data well , especially when variables >> observations. And also random forest is famous for its robustness on different messy data. So it is the one worth trying most of the time.
 
+### Separate training and testing
+Break the raw data into training set(75%) and testing set (25%). In most of the case, there is no need to have a test if cross-validation is used to estimated the model error. The purpose here is mimicking the reality that the model will be applied to some points after being built. Also the test set here is a good second check.
+```{r echo=FALSE}
+## Use 75% of the sample as training set
+smp_size <- floor(0.75 * nrow(df))
+set.seed(123)
+train_ind <- sample(seq_len(nrow(df)), size = smp_size)
+train <- df[train_ind, ]
+test <- df[-train_ind, ]
+
+# Separate variables and class
+x<-subset(train,select=-class)
+y<-train[,"class"]
+x.test<-subset(test,select=-class)
+y.test<-test[,"class"]
+```
+
 ### SVM
+SVM is designed to dealing with high dimentional data and non-linear system. It has very good performance in wide range of scenarios when data is not highly sknewed.  However, when the number of variables is much higher than the observations, SVM could be overfitted. Thus variable/feature selection is important in this case.
+First, implement a simple SVM with tunned parameters:
+```{r echo=FALSE}
+# Classifier 1: SVM 
+# SVM is good for when # of variables > # of records
+svm_model <- svm(class ~., data=train, type="C-classification",cross=10)
+svm_test<-predict(svm_model,x.test)
+# Tune SVM
+svm_tune <- tune(svm, train.x=x, train.y=y, kernel="radial", ranges=list(cost=10^(-1:2), gamma=c(.5,1,2)))
+# Using the best cost and gamma to build SVM again
+svm_model_tuned<-svm(class ~., data=train, type="C-classification", kernel="radial", cost=svm_tune$best.parameters$cost,gamma=svm_tune$best.parameters$gamma, cross=10)
+svm_tune
+```
+
+The estimated error is `r 1-svm_model_tuned$tot.accuracy/100` which improves very little. And take a look at the accuracy by class: 
+```{r echo=FALSE}
+svm_pred_tuned<-predict(svm_model_tuned,x)
+svm_tuned_test<-predict(svm_model_tuned,x.test)
+knitr::kable(table(svm_tuned_test, y.test))
+```
+
+Test error: `r mean(svm_tuned_test == y.test)`
+Model estimated error (by 10-fold CV): `r 1-svm_model_tuned$tot.accuracy/100`
+
+#### Variable Selection
+The number of variables is much larger than observations which may overfit the model if use all of them. A simple forward variable selection method is implemented to select the subset from training data set. Here are the steps:
+
+1. Sort the variables by their correlation to `class` in descending order;
+1. Start from the first variable which is the one with the highest correlation;
+1. Train the SVM model with the subset of variables;
+1. Tune the SVM model and estimated the error;
+1. Add another variable into the training set and go back to #3;
+1. Pick the subset with the lowest est. error.
+
+Here we pick the best subset from the top 10 variables in terms of correlation to class.
+
+```{r echo=FALSE, results='hide'}
+# Order by the class correlation
+var.sort<-order(abs(varClassCorr), decreasing = T)
+best.performance=1
+svm_best_tune = svm_tune
+best.trainSet = train
+for (v in 1:10){
+  trainSet<- train[,var.sort[1:v]]
+  svm_tune <- tune(svm, train.x=trainSet, train.y=y, kernel="radial", ranges=list(cost=10^(-1:2), gamma=c(.5,1,2)))
+  if(svm_tune$best.performance < best.performance){
+    best.performance = svm_tune$best.performance
+    svm_best_tune = svm_tune
+    best.trainSet = trainSet
+  } 
+}
+head(best.trainSet)
+svm_best_model<-svm(class ~., data=cbind(best.trainSet, class=y), type="C-classification", kernel="radial", cost=svm_best_tune$best.parameters$cost,gamma=svm_best_tune$best.parameters$gamma, cross=10)
+svm_best_model_test<-predict(svm_best_model,x.test)
+```
+
+`r colnames(best.trainSet)` are selected. And here is the result of using the new training set
+
+- estimated error: `r svm_best_tune$best.performance`
+- test error: `r 1-mean(svm_best_model_test == y.test)`
 
 ### Random forest
+Based on the random forest official website (http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#remarks), Random forests is very robust against large number of variables. It is very hard to make RF overfit.  Thus I don't use any variable selection techniques. Meanwhile, random forest uses bootstraping, so there is also no need for cross-validation or separate test set. The only reason for using test set here is to give a second check.
+
+```{r echo=FALSE, ,results="hide"}
+rf_model <- randomForest(as.factor(class) ~ ., data=train, importance=TRUE, ntree=2000)
+plot(rf_model)
+pred_rf<-predict(rf_model,x)
+rf_model_test<-predict(rf_model,x.test)
+```
+From the fiture above, the predict error get stable as number of trees going up.
+When Here is the performance summary of random forest
+```{r echo=FALSE}
+rf_model
+```
+
+
+### Conclusion
+Based on the test set accuracy and cross validation, the random forest 
+SVM
+
+- estimated error: `r 1-svm_model_tuned$tot.accuracy/100`
+- test error: `r mean(svm_tuned_test == y.test)`
+
+SVM - Simple Forawrd Selection
+
+- estimated error: `r svm_best_tune$best.performance`
+- test error: `r 1-mean(svm_best_model_test == y.test)`
+
+Randomforest
+
+- estimated error: `r median((rf_model$err.rate)[,1])`
+- test error: `r 1-mean(rf_model_test == y.test)`
 
 The figure sizes have been customised so that you can easily put two images side-by-side. 
 
