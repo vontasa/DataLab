@@ -49,7 +49,7 @@ class Solution(object):
     """
     Given a binary tree, return the level order traversal of its nodes' values. (ie, from left to right, level by level).
     For example:
-        Given binary tree [3,9,20,null,null,15,7],
+    Given binary tree [3,9,20,null,null,15,7],
     """
     def levelOrder(self, root):
         """
@@ -65,12 +65,35 @@ class Solution(object):
             tree.append(root[start : end])
             l+=1
         return tree
+    
+    """
+    Given a string which contains only lowercase letters, remove duplicate letters so that every letter appear once and only once. You must make sure your result is the smallest in lexicographical order among all possible results.
+    
+    Example:
+    Given "bcabc"
+    Return "abc"
+    
+    Given "cbacdcbc"
+    Return "acdb"
+    """
+    def removeDuplicateLetters(self, s):
+        """
+        :type s: str
+        :rtype: str
+        """
+        n=len(s)
+        map={}
+        for c in s:
+            map[c] = c
+        output_string = "".join(sorted(map.values()))
+        return output_string
+        
         
 def main():
     solution = Solution()
 #    print solution.strStr("123","a")
 #    print solution.firstMissingPositive([1])
 #    print solution.levelOrder([1,2,3,4,5,6,7,8,9,0])
-    
+    print solution.removeDuplicateLetters("abccdddfdfdfff")
 if __name__ == "__main__":
     main()
