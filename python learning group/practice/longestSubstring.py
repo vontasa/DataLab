@@ -9,20 +9,34 @@ class Solution:
         current=0
         sub=[]
         d={}
-        for i, v in s:
-            sub=s[i:len(s)]
-            d={}
-            curr=0
-            for j,vj in sub:
-                if d[v]:
-                    if curr>best:
-                        best=curr
-                    break
+        head=0
+        tail=0
+        bestH = 0
+        bestT = 0
+        for i in range(0,len(s)):   
+            v=s[i]          
+            if v in d:
+                if(d[v] >= head):
+                    current=i-head
+                    if(current > best):
+                        best = current
+                        bestH = head
+                        bestT = i-1
+                        bestSub = s[head:i]
+                    # Update the dictionary and head
+                    head=d[v]+1
                 else:
-                    d[v]=1
-                    curr+=1
+                    current=i-head+1
+            else:
+                current=i-head+1
+            d[v]=i
+        # For the case best string is from head to end
+        best = max(current, best)
         return best
         
 if __name__ == '__main__':
-    result=Solution.lengthOfLongestSubstring("sdsdssfjjhuinawdnk")
+    
+    #print(Solution().lengthOfLongestSubstring("tmmzuxt")==5)
+    #print(Solution().lengthOfLongestSubstring("qwnfenpglqdq"))
+    print(Solution().lengthOfLongestSubstring("q"))
         
