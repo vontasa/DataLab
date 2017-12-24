@@ -39,8 +39,8 @@ p<-ggmap(map, extent = "device") +
                  bins = 16, geom = "polygon") + 
   scale_fill_gradient(low = "white", high = "red") + 
   scale_alpha(range = c(0, 0.3), guide = FALSE)
-
+p
 setwd("~/workspace/github/datalab/mobikeData/")
 gganimate(p)
 write.gi
-write.csv(df,"~/workspace/github/datalab/mobikeData/wuhan_snapshot_89.csv",row.names = F)
+write.csv(df,"~/workspace/github/datalab/mobikeData/wuhan_snapshot_11_2_2017.csv",row.names = F)
