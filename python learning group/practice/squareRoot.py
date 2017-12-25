@@ -1,19 +1,36 @@
 class Solution:
-    def newton(self, nums1, nums2):
+    def newton(self, n, eps = 0.0001, x0=1):
         """
-        :type nums1: List[int]
-        :type nums2: List[int]
-        :rtype: float
+        :type n: int
+        Solve the square root of n^0.5 by using newton method
+        fx = x^2-n
+        f'x = 2x
+        xn+1 = xn-fx/f'x
         """
-        l = nums1+nums2
-        l.sort()
-        n = len(l)
-        print(l)
-        if(n==1):
-            return(l[0])
-        if(n%2==0):
-            return((l[int(n/2-1)]+l[int(n/2)])/2)
-        else:
-            return(l[int(n/2)])
+        e=10
+        x=x0
+        i=0
+        while(e>eps or i<1000):
+            x = float(x- (x**2-n)/(2*x))
+            e = x**2-n
+            i=i+1
+        return(x)
+    
+    def fastInverse(self, n):
+        import numpy as np
+        threehalfs = 1.5
+        x2 = n * 0.5
+        y = np.float32(n)
+        
+        i = y.view(np.int32)
+        i = np.int32(0x5f3759df) - np.int32(i >> 1)
+        y = i.view(np.float32)
+        
+        y = y * (threehalfs - (x2 * y * y))
+        return float(1/y)
+        
 
 if __name__ == '__main__':
+    print(Solution().newton(2))
+    print(Solution().newton(2, x0=-1))
+    print(Solution().fastInverse(2))
