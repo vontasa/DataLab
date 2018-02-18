@@ -29,8 +29,23 @@ class Solution:
         y = y * (threehalfs - (x2 * y * y))
         return float(1/y)
         
+    def biparty(self, n,start =0, end=0, E=0.001, N=1000):
+        if((start+end)==0):
+            end = n
+        x = (start+end)/2
+        e = x**2-n
+        if(abs(e)<E):
+            return x
+        elif e>0: # result in the left half
+            end = x
+        else: # result in the right half
+            start = x
+        return (self.biparty(n, start = start, end = end))
+        
+
 
 if __name__ == '__main__':
     print(Solution().newton(2))
     print(Solution().newton(2, x0=-1))
     print(Solution().fastInverse(2))
+    print(Solution().biparty(3))
