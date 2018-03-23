@@ -15,16 +15,16 @@ class Solution(object):
         """
         result = []
         for i, vi in enumerate(nums):
-            for j, vj in enumerate(nums):
-                if (vi+vj)==target:
-                    result = [i,j]
+            for j, vj in enumerate(nums[i+1:]):
+                if ((vi+vj) == target) :
+                    result = [i,j+i+1]
                     return result
         
         
 def main():
     solution = Solution()
-    print solution.twoSum([3,2,4],6)
-    print solution.twoSum([1,2,3,4,5,6],11)
+    print(solution.twoSum([3,2,4],6))
+    print(solution.twoSum([1,2,3,4,5,6],11))
     
 if __name__ == "__main__":
     main()
