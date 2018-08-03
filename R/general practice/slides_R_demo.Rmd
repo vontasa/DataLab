@@ -1,0 +1,70 @@
+---
+title: "Basic Useful R"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+# Basic setup and library import
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+```
+
+## R Markdown
+
+This is an R Markdown presentation. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+## Slide with Bullets
+
+- Bullet 1
+- Bullet 2
+- Bullet 3
+
+## Slide with R Output
+
+```{r cars, echo = TRUE}
+summary(cars)
+```
+<!--This is a comment-->
+## Slide with Plot
+
+```{r pressure}
+plot(pressure)
+```
+
+## dplyr package
+There are 4 key operations:
+
+- mutate() adds new variables that are functions of existing variables
+- select() picks variables based on their names.
+- filter() picks cases based on their values.
+- summarise() reduces multiple values down to a single summary.
+- arrange() changes the ordering of the rows.
+
+## dplyr - filter() and selet()
+```{r,echo = TRUE}
+starwars %>% 
+  filter(species == "Droid") %>%
+  select(name, ends_with("color"))
+```
+
+## dplyr - mutate() and arrange()
+```{r, echo = T}
+starwars %>% 
+  mutate(name, bmi = mass / ((height / 100)  ^ 2)) %>%
+  select(name:mass, bmi) %>%
+  arrange(desc(mass))
+```
+
+## dplyr - summarise() and group_by()
+```{r, echo=T}
+starwars %>%
+  group_by(species) %>%
+  summarise(
+    n = n(),
+    mass = mean(mass, na.rm = TRUE), 
+    mass_median = median(mass, na.rm = TRUE)
+  ) %>%
+  filter(n > 1)
+```
