@@ -3,6 +3,11 @@
 # Yan Wang
 # Date: 8/3/2018
 # Description: Basic code and functions for naive ML 
+# Appendix:
+# An intro to ML in R: https://lgatto.github.io/IntroMachineLearningWithR/unsupervised-learning.html#k-means-clustering
+# Fina na: https://sebastiansauer.github.io/sum-isna/
+# Kaggle ml intro: https://www.kaggle.com/camnugent/introduction-to-machine-learning-in-r-tutorial
+# Little book of R for TS: http://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/
 # -----------------------------------------------------------------------------
 
 if(F){ # choose to install the packages
@@ -17,19 +22,31 @@ if(F){ # choose to install the packages
   install.packages("corrplot")
 }
 
-library(ggplot2) # general plotting
-library(nnet)  # multinom
-library(rpart) # rf
-library(e1071) # svm
-library(caret) # evaluate model
+library(ggplot2)  # general plotting
+library(nnet)     # multinom
+library(rpart)    # rf
+library(e1071)    # svm
+library(caret)    # evaluate model
 library(GGally)
-library(tidyr) # reshape table
-library(dplyr) # manipulate table
+library(tidyr)    # reshape table
+library(dplyr)    # manipulate table
 library(corrplot) # correlation plot
 # First look
 head(iris)
 summary(iris)
-sum(is.na(iris))
+
+# ---------------------------
+# Find NA
+# ---------------------------
+sum(is.na(iris)) # Count total NA
+# Count NA by column method 1: sapply
+sapply(iris, function(x) sum(is.na(x))) 
+# Count NA by column method 2: dplyr
+iris %>%
+  select(everything()) %>%  # replace to your needs
+  summarise_all(funs(sum(is.na(.))))
+# For more ways to  counting NA refer to https://sebastiansauer.github.io/sum-isna/
+
 # ---------------------------
 # Remove na and null
 # ---------------------------
@@ -37,6 +54,12 @@ sum(is.na(iris))
 iris[complete.cases(iris), ]
 # Select rows only if partial columns are not na
 iris[complete.cases(iris[, 2:3]), ]
+
+# ---------------------------
+# Imputation
+#----------------------------
+# Imput missing value by median
+iris$Sepal.Length[is.na(iris$Sepal.Length)] = median(iris$Sepal.Length , na.rm = TRUE)
 
 # ---------------------------
 # Naive outlier remove
@@ -106,18 +129,20 @@ p<-ggplot(iris, aes(x=Petal.Width, color=Species, fill=Species)) +
 p
 
 
+# ---------------------------
 # Prepare training and test set
+# ---------------------------
 set.seed(100)
 x_col <- c(1:4)
 y_col <- 5
 train_index <- sample(1:nrow(iris), 0.8 * nrow(iris))
-test_index <- setdiff(1:nrow(iris), train_index)
+test_index <- -train_index
 
 train<- iris[train_index, ]
 test <- iris[test_index, ]
-
+(nrow(train)+nrow(test)) == nrow(iris) # check if train + test = all
 colMeans(train[, x_col])
-# Normalize the columns between 0 - 1
+# Normalize the variable columns between -1 - 1
 train[, x_col] <- scale(train[, x_col])
 test[, x_col] <- scale(test[, x_col])
 
@@ -143,6 +168,16 @@ summary(lm.fit)
 null.fit <- lm('Sepal.Length ~ 1', data = train)
 full.fit <- lm('Sepal.Length ~ .', data = train)
 print(full.fit)
+
+# Use caret to evaluate
+set.seed(42)
+model.lm <- train(formula, iris,
+               method = "lm", 
+               trControl = trainControl(method = "cv", 
+                                        number = 10, 
+                                        verboseIter = FALSE))
+model.lm
+
 # Linear model - var selection
 fwd.model = step(null.fit, direction='forward', scope=list(upper=full.fit))
 print(fwd.model)
@@ -171,11 +206,17 @@ BIC(multinom.fit)
 rf.fit <- rpart(formula,data=train)
 print(rf.fit)
 table(predict(rf.fit, test[,x_col], type = 'class'), test$Species)
+# Print variable importance
+rf.fit$variable.importance
 #confusionMatrix(predict(rf.fit, test[,x_col], type = 'class'), test$Species)
 
 # SVM
-svm.fit<- svm(formula, data = train)
+svm.fit<- svm(formula, data = train, cross = 10) # 10 fold-cv
 print(svm.fit)
+summary(svm.fit)
 table(predict(svm.fit, test[,x_col], type = 'class'), test$Species)
 #confusionMatrix(predict(svm.fit, test[,x_col], type = 'class'), test$Species)
 
+# Tune SVM 
+tuned.svm.fit = tune.svm(formula, data = train, gamma = 10^-2, cost = 10^2, tunecontrol=tune.control(cross=10))
+summary(tuned.svm.fit)
