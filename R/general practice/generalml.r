@@ -5,9 +5,10 @@
 # Description: Basic code and functions for naive ML 
 # Appendix:
 # An intro to ML in R: https://lgatto.github.io/IntroMachineLearningWithR/unsupervised-learning.html#k-means-clustering
-# Fina na: https://sebastiansauer.github.io/sum-isna/
+# Find na: https://sebastiansauer.github.io/sum-isna/
 # Kaggle ml intro: https://www.kaggle.com/camnugent/introduction-to-machine-learning-in-r-tutorial
 # Little book of R for TS: http://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/
+# caret intro document: http://topepo.github.io/caret/index.html
 # -----------------------------------------------------------------------------
 
 if(F){ # choose to install the packages
@@ -171,11 +172,10 @@ print(full.fit)
 
 # Use caret to evaluate
 set.seed(42)
-model.lm <- train(formula, iris,
+model.lm <- train(formula_pred, data=iris,
                method = "lm", 
-               trControl = trainControl(method = "cv", 
-                                        number = 10, 
-                                        verboseIter = FALSE))
+               metric="RMSE",
+               trControl = trainControl(method = "cv", number = 10))
 model.lm
 
 # Linear model - var selection
@@ -200,7 +200,7 @@ print(multinom.fit)
 table(predict(multinom.fit, test[,x_col], type = 'class'), test$Species)
 AIC(multinom.fit)
 BIC(multinom.fit)
-#confusionMatrix(predict(multinom.fit, test[,x_col], type = 'class'), test$Species)
+confusionMatrix(predict(multinom.fit, test[,x_col], type = 'class'), test$Species)
 
 # Randomforest
 rf.fit <- rpart(formula,data=train)
@@ -209,6 +209,10 @@ table(predict(rf.fit, test[,x_col], type = 'class'), test$Species)
 # Print variable importance
 rf.fit$variable.importance
 #confusionMatrix(predict(rf.fit, test[,x_col], type = 'class'), test$Species)
+model.rf <- train(formula, data=iris,
+                  method = "rf", 
+                  trControl = trainControl(method = "cv", number = 10))
+model.rf
 
 # SVM
 svm.fit<- svm(formula, data = train, cross = 10) # 10 fold-cv
