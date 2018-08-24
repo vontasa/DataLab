@@ -210,15 +210,19 @@ Q: 7
 -- user churned (last month yes, this month no)
 -- user revived (last month no, this month yes)
 
-SELECT DISTINCT userid
-FROM table 
-WHERE DATE_FORMAT(act_time, '%Y-%m') = DATE_FORMAT(DATE(), '%Y-%m')
-INTERCECT / EXCEPT
-SELECT DISTINCT userid
-FROM table 
-WHERE DATE_FORMAT(act_time, '%Y-%m') = DATE_FORMAT(DATEADD(m, -1, DATE()), '%Y-%m')
-
-
+SELECT yearmonth, status, COUNT(userid) AS count FROM(
+  SELECT useris, DATE_FORMAT(act_time, '%Y-%m') as yearmonth,
+  (CASE  WHEN a.userid IS NOT NULL AND b.userid IS NOT NULL THEN 'active'
+  WHEN a.userid IS NULL AND b.userid IS NOT NULL THEN 'churned'
+  WHEN a.userid IS NOT NULL AND b.userid IS NULL THEN 'revived') AS status
+  FROM table a
+  OUTER JOIN (
+  SELECT useris, DATE_FORMAT(act_time, '%Y-%m') as yearmonth, COUNT(userid) AS act
+  FROM table
+  ) b ON 
+  (a.userid = b.userid AND a.yearmonth = b.yearmonth+1)
+)
+GROUP BY yearmonth, status
 
 "
 
@@ -235,3 +239,117 @@ filter(log2, !is.na(act_time.x) & !is.na(act_time.y))
 filter(log2, !is.na(act_time.y) & is.na(act_time.x))
 "user revived"
 filter(log2, !is.na(act_time.x) & is.na(act_time.y))
+
+"
+Q8
+-- dialog{userid, appid, type, flag('im', 'cl'), time}
+-- how to compute click through rate
+# Based on action
+SELECT appid, SUM(CASE THEN flag='cl' THEN 1 ELSE 0)/COUNT(userid)
+FROM dialog
+GROUP BY appid
+
+# Based on user
+SELECT appid, COUNT(DISTINCT userid) FROM dialog a RIGHT JOIN
+(SELECT appid COUNT(DISTINCT userid)) b ON
+(a.appid = b.appid AND a.flag='cl')
+GROUP BY appid
+"
+cli <-filter(flag == 'cl') %>%
+  group_by(appid) %>%
+  summarise(cli_count = n_distinct(userid))
+
+tot <- group_by(dialog, appid) %>%
+  summarise(total_count = n_distinct(userid))
+
+left_join(cli, tot, by='appid') %>%
+  mutate(ctr = cli_count/total_count)
+
+"
+Q9:
+table1: date, carrier, country, phone_number, type {friend_notice, confirmation, other}
+table2 (Phone numbers who have responded to the confirmation): date, phone_number
+"
+"
+How many numbers were sent confirmation message yesterday?
+(tip: duplicate number)
+
+SELECT COUNT(DISTINCT phone_number) FROM table1
+WHERE date = (Date()-1) AND type='confirmation'
+"
+filter(table1, date == (Sys.Date()-1) & type = 'confirmation') %>%
+  summarise(count = n_distinct(phone_number))
+
+"
+confirmation rate/day
+(tip: duplicate number, time window)
+
+SELECT  date,
+        COUNT(DISTINCT phone_number) AS sent, 
+        SUM(CASE WHEN b.date - a.date <= AVG(DATEDIFF(a.date, b.date)) THEN 1 ELSE 0) AS confirmed, 
+        confirmed/sent AS rate
+FROM table1
+LEFT JOIN table2 AS b ON
+(a.phone_number = b.phone_number AND a.type = 'confirmation')
+GROUP BY date
+"
+sent <- filter(table1, type = 'confirmation') %>%
+  group_by(date) %>%
+  summarise(count = n_distinct(phone_number))
+
+confirmed <- group_by(table2, date) %>%
+  summarise(count = n_distinct(phone_number))
+
+left_join(sent, confirmed, by='phone_number') %>%
+  filter(date.y - date.x <=quantile(date.y - date.x, 0.9))
+
+"
+SQL Q10:
+--table A: advertiser_id, ad_id, spend
+--table B: ad_id, user_id, spend 
+q1 : Calculate ROI for each advertiser_id 
+SELECT advertiser_id, ISNULL(return,0)/spend
+FROM
+(SELECT advertiser_id, SUM(spend) AS spend 
+  FROM A 
+  GROUP BY advertiser_id) a
+LEFT JOIN(
+  SELECT advertiser_id, SUM(b.spend) AS return
+  FROM A a LEFT JOIN B b ON
+  (a.ad_id = b.ad_id)
+  GROUP BY advertiser_id
+) c ON
+(a.advertiser_id = c.advertiser_id)
+"
+return <- left_join(B, A, by='ad_id') %>% 
+  group_by(advertiser_id, ad_id) %>%
+  summarise(return = sum(spend))
+
+ad_roi <- left_join(A, return, by=c('advertiser_id', 'ad_id')) %>%
+  mutate(roi = ifelse(is.na(return), 0, return)/spend)
+
+advertiser_roi <- group_by(ad_roi, advertiser_id) %>%
+  summarise(roi = sum(ifelse(is.na(return), 0, return))/sum(spend))
+
+"
+SQL Q11:
+Given the following tables how would you know who has the most friends 
+REQUESTS { date, sender_id,  accepter_id }
+ACCEPTED { accepted_at,  accepter_id,  sender_id }
+
+If 2 users have the following history: request, accept, request. It means they are not friend in the end. So only the last action of a pair of users is meaningful
+"
+log<-rbind(
+  select(REQUESTS, date, id1 = sender_id, id2 = accepter_id, type = 'request'),
+  select(REQUESTS, date, id1 = accepter_id, id2 = sender_id, type = 'request'),
+  select(ACCEPTED, date = accepted_at, id1 = sender_id, id2 = accepter_id, type = 'accept'),
+  select(ACCEPTED, date = accepted_at, id1 = accepter_id, id2 = sender_id, type = 'accept')
+)
+
+group_by(log, id1, id2)%>%
+  mutate(rank = rank(date)) %>%
+  filter(rank ==1 & type == 'accept') %>%
+  group_by(id1) %>%
+  summarise(friends = n_distinct(id2)) %>%
+  arrange(desc(friends)) %>% slice(1)
+# OR filter(friends == max(friends))
