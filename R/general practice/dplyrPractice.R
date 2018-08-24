@@ -200,3 +200,38 @@ WHERE rank = 1
 "
 union_all(tb1, tb2) %>% group_by(user1) %>%
   filter(date = max(date))
+
+"
+Q: 7
+-- how do you calculate monthly active users, churned users and resurrected users from a user activity log
+-- log {userid, act_time)  
+
+-- user active (last month yes, this month yes)
+-- user churned (last month yes, this month no)
+-- user revived (last month no, this month yes)
+
+SELECT DISTINCT userid
+FROM table 
+WHERE DATE_FORMAT(act_time, '%Y-%m') = DATE_FORMAT(DATE(), '%Y-%m')
+INTERCECT / EXCEPT
+SELECT DISTINCT userid
+FROM table 
+WHERE DATE_FORMAT(act_time, '%Y-%m') = DATE_FORMAT(DATEADD(m, -1, DATE()), '%Y-%m')
+
+
+
+"
+
+library(lubridate)
+log<- mutate(log, month = month(act_time)) %>% group_by(userid, month) %>%
+  summarise(count=n())
+last_month <- filter(log, month==(month(Sys.Date()-1)))
+this_month <- filter(log, month==(month(Sys.Date())))
+log2<-this_month %>% full_join(last_month, by='userid')
+
+"user active"
+filter(log2, !is.na(act_time.x) & !is.na(act_time.y))
+"user churned"
+filter(log2, !is.na(act_time.y) & is.na(act_time.x))
+"user revived"
+filter(log2, !is.na(act_time.x) & is.na(act_time.y))
