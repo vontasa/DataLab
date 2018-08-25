@@ -353,3 +353,74 @@ group_by(log, id1, id2)%>%
   summarise(friends = n_distinct(id2)) %>%
   arrange(desc(friends)) %>% slice(1)
 # OR filter(friends == max(friends))
+
+"
+Table {date, u1, u2, n_msg}
+It contains the number of messages sent between all unique pair of users
+1. What we could learn from this table?
+Total amount of messages sent a day
+How many contancts a user usually talk to
+number of active users per day
+Social network
+How close between users
+Who is the important hub user (connect to a lot other users)
+
+2. Get the distribution of number of fiends who communicate. 
+SELECT n_msg, COUNT(u1) AS users
+FROM
+  (SELECT u1, SUM(n_msg) as n_msg 
+    FROM
+      (SELECT u1, u2, date, n_msg FROM table
+      UNION ALL
+      SELECT u2, u1, date, n_msg FROM table)
+    GROUP BY u1)
+GROUP BY n_msg
+
+3. Get the pair who send the most messages and percentage of the total
+SELECT date, MAX(n_msg)/SUM(n_msg) AS pct
+FROM table
+GROUP BY date
+"
+msg<-union_all(select(table, u1, u2, date, n_msg), select(table, u1=u2, u2=u1, date, n_msg)) %>%
+  group_by(u1) %>%
+  summarise(n_msg = sum(n_msg)) 
+group_by(msg, n_msg) %>%
+  summarise(n_user = count(u1))
+# Density plot
+ggplot(msg, aes(n_msg))+geom_density()
+
+mutate(msg, rate = n_msg/sum(n_msg)) %>%
+  filter(rate == max(rate))
+
+"
+Q13
+The table is given as TABLE {date,  actor_uid, target_uid, action}
+action = {'send_request', 'accept_request', 'unfriend'}
+actor_uid = the person who takes the action
+
+Q1: How is the overall friending acceptance rate changing over time?
+SELECT date, COUNT(b.actor_uid)/SUM(CASE WHEN b.date < a.date + x THEN 1 ELSE 0) AS rate
+FROM table a LEFT JOIN table b ON
+(a.action = 'send' AND b.action='accept' AND
+a.actor_uid = b.target_uid AND a.target_uid = b.action_uid AND
+)
+GROUP BY date
+"
+accept <- filter(table, action=='accept')
+request <- filter(table, action=='send')
+left_join(request, accept, by=c('actor_uid'='target_uid', 'target_uid'='actor_uid')) %>%
+  mutate(overtime = (date.y-date.x>=max_time)) %>%
+  group_by(date)%>%
+  summarise(rate = sum(!overtime)/n())
+
+"
+Q2: Who has the most number of friends?
+"
+df <- filter(table, action %in% c('unfriend', 'accept'))
+union_all(select(df, id = actior_uid, action), select(df, id = target_uid, action))%>%
+  mutate(change = ifelse(action=='accept', 1, -1)) %>%
+  group_by(id) %>%
+  summarise(friends = sum(change))
+    
+  summarise()
+  
