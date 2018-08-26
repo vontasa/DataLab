@@ -9,17 +9,21 @@ student_id | school_id | grade_level | date_of_birth | hometown
 
 Using this data, you could answer questions like the following:
     What was the overall attendance rate for the school district yesterday?
+
 SELECT SUM(CASE WHEN a.attendance = 1 THEN 1 ELSE 0)/COUNT(b.student_id)
 FROM attendance a
 RIGHT JOIN student b ON
 (a.student_id = b.student_id)
-WHERE a.date = date()-1
+WHERE a.date = dateadd(day,datediff(day,1,GETDATE()),0)
+
+// datediff, calculate days diff between day 1 to GETDATE()
+// add this date diff to day 0
 
     Which grade level currently has the most students in this school district?
 SELECT TOP 1 grade_level, COUNT(student_id) AS count
 FROM student
 GROUP BY grade_level
-ORDER BY COUNT(student_id) DESC
+ORDER BY count DESC
 
     Which school had the highest attendance rate? The lowest?
 
@@ -31,7 +35,7 @@ GROUP BY a.school_id
 ORDER BY rate DESC|ASC
 "
 att <-attendance %>% filter(date = Sys.Date()-1) %>%
-  summarise(count = sum(ifelse(attendance==1, 1, 0)))
+  summarise(count = sum(attendance==1))
 total <- nrow(student)
 att/total
 
@@ -45,7 +49,7 @@ attendance %>% filter(date = Sys.Date()-1) %>%
   summarise(count = n(),
             attend = sum(attendance==1),
             rate = attend/count) %>%
-  filter(rate == max(rate) & rate == min(rate))
+  filter(rate == max(rate) | rate == min(rate)) # most or least attendance rate school
 "
 Q1
 t1: name, category; # player name and category 
@@ -69,6 +73,7 @@ df1 %>% group_by(category) %>%
     count = n_distinct(follower)
   ) %>%
   filter(category == 'NBA')
+
 "How many NBA followers also follow NFL" 
 t1 %>%
   filter(category %in% c('NBA', 'NFL')) %>%
@@ -80,6 +85,7 @@ t1 %>%
     count = n_distinct(category)) %>% 
   filter(count ==2) %>%
   summarise(count = n())
+
 
 "How many NBA celetrities follows NFL"
 all <- t2 %>%
@@ -100,11 +106,25 @@ target_id: post owner's id
 content_id: post_id or comment_id
 "
 
-"Total # of comments and total # of posts"
+"Total # of comments and total # of posts
+SELECT content_type, COUNT(*) as total
+FROM content
+GROUP BY content_type
+
+"
 content %>% group_by(content_type) %>%
   summarise(count = n_distinct(content_id))
 
-"distribution of comments over post"
+"distribution of comments over post
+SELECT comments, COUNT(post_id) AS posts_count
+FROM
+  (SELECT a.content_id AS post_id, ISNULL(COUNT(b.content_id), 0) AS comments
+  FROM content a LEFT JOIN content b ON
+  (b.target_id = a.userid)
+  WHERE a.content_type = 'post' AND b.content_type = 'comment'
+  GROUP BY a.content_id)
+GROUP BY comments
+"
 comments <- content %>% filter(content_type == 'post') %>%
   left_join(content, by = c('target_id' = 'userid')) %>%
   group_by(content_id) %>%
@@ -415,9 +435,17 @@ left_join(request, accept, by=c('actor_uid'='target_uid', 'target_uid'='actor_ui
 
 "
 Q2: Who has the most number of friends?
+SELECT id, SUM(CASE WHEN action='accept' THEN 1 ELSE -1) AS friends
+FROM(  
+  SELECT actor_uid AS id, action FROM table WHERE action IN ('accept', 'unfriend')
+  UNION ALL
+  SELECT target_uid AS id, action FROM table WHERE action IN ('accept', 'unfriend')
+) 
+GROUP BY id
+
 "
 df <- filter(table, action %in% c('unfriend', 'accept'))
-union_all(select(df, id = actior_uid, action), select(df, id = target_uid, action))%>%
+union_all(select(df, id = actor_uid, action), select(df, id = target_uid, action))%>%
   mutate(change = ifelse(action=='accept', 1, -1)) %>%
   group_by(id) %>%
   summarise(friends = sum(change))
