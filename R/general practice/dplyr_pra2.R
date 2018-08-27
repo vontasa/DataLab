@@ -37,3 +37,18 @@ msleep %>% group_by(vore) %>%
          sleep_norm = sleep_total/mean(sleep_total),
          sleep_mean = mean(sleep_total)) %>%
   select(vore, voure_count, sleep_total, sleep_mean, sleep_norm)
+
+# Without group_by, the summarise function will base on ALL records
+# pick the record with largest rate: filter(rate == max(rate)) or sort+slice(1)
+mutate(msleep, qti = quantile(awake, 0.9),
+       rate = awake/quantile(awake, 0.9),
+       rank = rank(desc(rate))) %>%
+  select(awake, qti, rate, rank) %>%
+  arrange(rank) %>%
+  slice(1:10) %>%
+  filter(rate == max(rate))
+
+# Percentage of records which has awake > 0.9 quantile
+summarise(msleep, 
+          rate = sum(ifelse(awake>quantile(awake, 0.9), 1, 0))/n()
+          )
