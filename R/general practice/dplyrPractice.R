@@ -9,21 +9,17 @@ student_id | school_id | grade_level | date_of_birth | hometown
 
 Using this data, you could answer questions like the following:
     What was the overall attendance rate for the school district yesterday?
-
 SELECT SUM(CASE WHEN a.attendance = 1 THEN 1 ELSE 0)/COUNT(b.student_id)
 FROM attendance a
 RIGHT JOIN student b ON
 (a.student_id = b.student_id)
-WHERE a.date = dateadd(day,datediff(day,1,GETDATE()),0)
-
-// datediff, calculate days diff between day 1 to GETDATE()
-// add this date diff to day 0
+WHERE a.date = (GETDATE()-1)
 
     Which grade level currently has the most students in this school district?
 SELECT TOP 1 grade_level, COUNT(student_id) AS count
 FROM student
 GROUP BY grade_level
-ORDER BY count DESC
+ORDER BY COUNT(student_id) DESC
 
     Which school had the highest attendance rate? The lowest?
 
@@ -34,8 +30,8 @@ LEFT JOIN attendance b ON
 GROUP BY a.school_id
 ORDER BY rate DESC|ASC
 "
-att <-attendance %>% filter(date = Sys.Date()-1) %>%
-  summarise(count = sum(attendance==1))
+att <-attendance %>% filter(date == Sys.Date()-1) %>%
+  summarise(count = sum(ifelse(attendance==1, 1, 0)))
 total <- nrow(student)
 att/total
 
@@ -49,18 +45,12 @@ attendance %>% filter(date = Sys.Date()-1) %>%
   summarise(count = n(),
             attend = sum(attendance==1),
             rate = attend/count) %>%
-  filter(rate == max(rate) | rate == min(rate)) # most or least attendance rate school
+  filter(rate == max(rate) & rate == min(rate))
 "
 Q1
 t1: name, category; # player name and category 
 t2: id, name, date; # player details
 t3: id, follower, date # player and follower
-SELECT t1.category, COUNT(t3.followers) AS followers, COUNT(DISTINCT t3.follower) AS users
-FROM t2 LEFT JOIN t1 ON
-(t2.name = t1.name)
-LEFT JOIN t3 ON
-(t2.id = t3.id)
-GROUP BY t1.category
 "
 t1 <- data.frame(name=c('a', 'b', 'c', 'd','e', 'f'),
                 category = c('NFL', 'NFL', 'NFL', 'NBA', 'NBA', 'MLB'))
@@ -68,7 +58,13 @@ t2 <- data.frame(id = c(1:6),
                  name = c('a', 'b', 'c', 'd','e', 'f'))
 t3 <- data.frame(id = c(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6),
                  follower = c(2, 3, 4, 5, 6, 1, 2, 3, 4, 1, 2, 3))
-"How many followers in each category"
+"How many followers in each category
+Discuss on duplicates if an people follows multiple players in a category
+SELECT category, COUNT(t3.follower) FROM t1
+LEFT JOIN t2 ON(t1.name = t2.name)
+LEFT JOIN t3 ON(t2.id = t3.id)
+GROUP BY category
+"
 df1<-t1 %>% 
   left_join(t2, by = 'name') %>%
   left_join(t3, by = 'id')%>%
@@ -92,8 +88,24 @@ t1 %>%
   filter(count ==2) %>%
   summarise(count = n())
 
+"How many NBA celetrities follows NFL
 
-"How many NBA celetrities follows NFL"
+NBA player
+SELECT id
+FROM t2 LEFT JOIN t1 ON
+(t2.name = t1.name)
+WHERE t1.category = 'NBA'
+
+NFL follower
+SELECT DISTINCT follower AS id
+FROM t3 LEFT JOIN t2 ON
+(t2.id = t3.id)
+LEFT JOIN t1 ON
+(t2.name = t1.name)
+WHERE t1.category = 'NFL'
+
+NFL follower INTERSECT NBA player
+"
 all <- t2 %>%
   left_join(t1, by='name')
 nba <- all %>% filter(category == 'NBA')
@@ -113,22 +125,21 @@ content_id: post_id or comment_id
 "
 
 "Total # of comments and total # of posts
-SELECT content_type, COUNT(*) as total
+SELECT content_type, COUNT(content_id)
 FROM content
 GROUP BY content_type
-
 "
 content %>% group_by(content_type) %>%
   summarise(count = n_distinct(content_id))
 
 "distribution of comments over post
-SELECT comments, COUNT(post_id) AS posts_count
-FROM
-  (SELECT a.content_id AS post_id, ISNULL(COUNT(b.content_id), 0) AS comments
-  FROM content a LEFT JOIN content b ON
-  (b.target_id = a.userid)
-  WHERE a.content_type = 'post' AND b.content_type = 'comment'
-  GROUP BY a.content_id)
+SELECT comments, COUNT(a.content_id) as posts FROM
+(
+SELECT a.content_id, a.content_type, COUNT(b.content_id) AS comments FROM content a
+LEFT JOIN content b ON
+(a.userid = b.target_id AND b.content_type = 'comment')
+WHERE a.content_type = 'post'
+GROUP BY a.content_id, a.content_type)
 GROUP BY comments
 "
 comments <- content %>% filter(content_type == 'post') %>%
@@ -157,12 +168,13 @@ table friending：date，action{‘send’，‘accept’}，user_id，target_id
 追问用现有表格如何算average frequency？说了一下。
 最后让用一个月为期限，算acceptance rate。
 
+// consider to use datediff(a, b) <=1
 SELECT a.date, COUNT(a.user_id) AS total, SUM(CASE WHEN (date.accept-date.send <= 1) THEN 1 ELSE 0) AS accept, accept/total AS rate
 FROM (
-  SELECT a.user_id, b.user_id, a.date AS date_send, b.date AS date.accept 
+  SELECT a.user_id, b.user_id, a.date AS date.send, b.date AS date.accept 
   FROM table a LEFT JOIN table b ON
-  (a.user_id = b.target_id AND a.target_id = b.user_id)
-  WHERE a.action ='send' AND b.action='accept'
+  (a.user_id = b.target_id AND a.target_id = b.user_id AND b.action='accept') // put this in ON only b with accept will join to a
+  WHERE a.action = 'send' // put this in where to filter only a.action= 'send'
 )
 GROUP BY a.date
   
@@ -190,7 +202,7 @@ GROUP BY country
 "
 table %>% group_by(country) %>%
   summarise(num_search = sum(num_search), 
-            zero_result_pct = sum(num_search*zero_result_pct)/sum(num_search))
+            zero_result_pct = num_search*zero_result_pct/sum(num_search))
 
 "
 Q6
@@ -225,9 +237,8 @@ FROM(
 )
 WHERE rank = 1
 "
-# if the last status was accept then they are friend.
 union_all(tb1, tb2) %>% group_by(user1) %>%
-  filter(date == max(date))
+  filter(date = max(date))
 
 "
 Q: 7
@@ -239,16 +250,17 @@ Q: 7
 -- user revived (last month no, this month yes)
 
 SELECT yearmonth, status, COUNT(userid) AS count FROM(
-  SELECT userid, DATE_FORMAT(act_time, '%Y-%m') as yearmonth,
-  (CASE  WHEN a.userid IS NOT NULL AND b.userid IS NOT NULL THEN 'active'
-  WHEN a.userid IS NULL AND b.userid IS NOT NULL THEN 'churned'
-  WHEN a.userid IS NOT NULL AND b.userid IS NULL THEN 'revived') AS status
-  FROM table a
-  OUTER JOIN (
-  SELECT userid, DATE_FORMAT(act_time, '%Y-%m') as yearmonth, COUNT(userid) AS act
-  FROM table
-  ) b ON 
-  (a.userid = b.userid AND a.yearmonth = b.yearmonth+1)
+  SELECT useris, DATE_FORMAT(act_time, '%Y-%m') as yearmonth,
+  (CASE   WHEN a.userid IS NOT NULL AND b.userid IS NOT NULL  THEN 'active'
+          WHEN a.userid IS NULL     AND b.userid IS NOT NULL  THEN 'churned'
+          WHEN a.userid IS NOT NULL AND b.userid IS NULL      THEN 'revived') AS status
+  FROM (
+    SELECT useris, DATE_FORMAT(act_time, '%Y-%m') as yearmonth, COUNT(userid) AS act FROM table
+  ) a
+  FULL JOIN (
+    SELECT useris, DATE_FORMAT(act_time, '%Y-%m') as yearmonth, COUNT(userid) AS act FROM table
+  ) b ON (a.userid = b.userid )
+  WHERE a.yearmonth = b.yearmonth+1
 )
 GROUP BY yearmonth, status
 
@@ -268,10 +280,6 @@ filter(log2, !is.na(act_time.y) & is.na(act_time.x))
 "user revived"
 filter(log2, !is.na(act_time.x) & is.na(act_time.y))
 
-# Another way
-summarise(log2, active_users = sum(!is.na(act_time.x) & !is.na(act_time.y)),
-                churned_users = sum(is.na(act_time.x) & !is.na(act_time.y)),
-                revived_users = sum(!is.na(act_time.x) & is.na(act_time.y)))
 "
 Q8
 -- dialog{userid, appid, type, flag('im', 'cl'), time}
@@ -280,18 +288,12 @@ Q8
 SELECT appid, SUM(CASE THEN flag='cl' THEN 1 ELSE 0)/COUNT(userid)
 FROM dialog
 GROUP BY appid
-"
-group_by(dialog, appid) %>%
-  summarise(cli_through_rate = SUM(ifelse(flag =='cl', 1, 0))/n())
 
-"
 # Based on user
-SELECT a.appid, b.cl/a.total AS cli_through_rate
-FROM
-(SELECT appid, COUNT(DISTINCT userid) AS total FROM dialog) a LEFT JOIN
-(SELECT appid COUNT(DISTINCT userid) AS cl FROM dialog WHERE flag = 'cl') b ON
-(a.appid = b.appid)
-GROUP BY a.appid
+SELECT appid, COUNT(DISTINCT b.userid)/COUNT(DISTINCT userid) FROM dialog a
+LEFT JOIN dialog b ON
+(a.appid = b.appid AND b.flag = 'cl')
+GROUP BY appid
 "
 cli <-filter(flag == 'cl') %>%
   group_by(appid) %>%
@@ -299,10 +301,14 @@ cli <-filter(flag == 'cl') %>%
 
 tot <- group_by(dialog, appid) %>%
   summarise(total_count = n_distinct(userid))
-
+# user based
 left_join(cli, tot, by='appid') %>%
   mutate(ctr = cli_count/total_count)
-
+# event based
+summarise(dialog, 
+          total = n(),
+          cli = sum(flag=='cl'),
+          cli_through_rate = cli/total)
 "
 Q9:
 table1: date, carrier, country, phone_number, type {friend_notice, confirmation, other}
@@ -315,7 +321,7 @@ How many numbers were sent confirmation message yesterday?
 SELECT COUNT(DISTINCT phone_number) FROM table1
 WHERE date = (Date()-1) AND type='confirmation'
 "
-filter(table1, date == (Sys.Date()-1) & type == 'confirmation') %>%
+filter(table1, date == (Sys.Date()-1) & type = 'confirmation') %>%
   summarise(count = n_distinct(phone_number))
 
 "
@@ -324,7 +330,7 @@ confirmation rate/day
 
 SELECT  date,
         COUNT(DISTINCT phone_number) AS sent, 
-        SUM(CASE WHEN (b.date - a.date) <= AVG(DATEDIFF(a.date, b.date)) THEN 1 ELSE 0) AS confirmed, 
+        SUM(CASE WHEN b.date - a.date <= AVG(DATEDIFF(a.date, b.date)) THEN 1 ELSE 0) AS confirmed, 
         confirmed/sent AS rate
 FROM table1
 LEFT JOIN table2 AS b ON
@@ -338,11 +344,8 @@ sent <- filter(table1, type = 'confirmation') %>%
 confirmed <- group_by(table2, date) %>%
   summarise(count = n_distinct(phone_number))
 
-# Use the 90% quantile of time gap as the condition
 left_join(sent, confirmed, by='phone_number') %>%
-  mutate(qualified = ((date.y - date.x) <=quantile(date.y - date.x, 0.9))) %>%
-  group_by(date.x) %>%
-  summarise(date.x, rate = sum(qualified)/n())
+  filter(date.y - date.x <=quantile(date.y - date.x, 0.9))
 
 "
 SQL Q10:
@@ -379,22 +382,6 @@ REQUESTS { date, sender_id,  accepter_id }
 ACCEPTED { accepted_at,  accepter_id,  sender_id }
 
 If 2 users have the following history: request, accept, request. It means they are not friend in the end. So only the last action of a pair of users is meaningful
-
-SELECT TOP 1 id1, COUNT(id2) AS friends
-FROM
-  (SELECT id1, type, date, ROW_NUMBER() OVER(PARTITION BY id1, id2 ORDER BY date DESC) AS rank
-  FROM  
-    (SELECT date, sender_id AS id1, accepter_id AS id2, 'request' AS type FROM REQUEST
-    UNION ALL
-    SELECT date, accepter_id AS id1, sender_id AS id2, 'request' AS type FROM REQUEST
-    UNION ALL
-    SELECT date, accepter_id AS id1, sender_id AS id2, 'accept' AS type FROM ACCEPTED
-    UNION ALL
-    SELECT date, sender_id AS id1, accepter_id AS id2, 'accept' AS type FROM ACCEPTED)
-)
-WHERE rank = 1 AND type = 'accept'
-GROUP BY id1
-ORDER BY friends DESC
 "
 log<-rbind(
   select(REQUESTS, date, id1 = sender_id, id2 = accepter_id, type = 'request'),
@@ -403,9 +390,8 @@ log<-rbind(
   select(ACCEPTED, date = accepted_at, id1 = accepter_id, id2 = sender_id, type = 'accept')
 )
 
-# rank by date, most recent date as rank 1
 group_by(log, id1, id2)%>%
-  mutate(rank = rank(desc(date))) %>%
+  mutate(rank = rank(date)) %>%
   filter(rank ==1 & type == 'accept') %>%
   group_by(id1) %>%
   summarise(friends = n_distinct(id2)) %>%
@@ -456,19 +442,14 @@ The table is given as TABLE {date,  actor_uid, target_uid, action}
 action = {'send_request', 'accept_request', 'unfriend'}
 actor_uid = the person who takes the action
 
-# a.action='send' filte out other joint result; b.action='accept', only join the record in b with 'accept' to a
-# in outer join, put the condition in ON like b.action='accept' or a.action='send', the total rows in result won't be changed. But the number of a matched is different
-# If the put the condition in WHERE clause, it works as a filter and happens after the join done. Then it will filter out the records based on the condition says
-
-# In inner join, it doesn't matter where to put the condition in. Because any unmatched records will be exlcuded by inner join
 Q1: How is the overall friending acceptance rate changing over time?
-SELECT date, SUM(CASE WHEN b.date < a.date + x THEN 1 ELSE 0)/COUNT(a.actor_uid) AS rate
+SELECT date, COUNT(b.actor_uid)/SUM(CASE WHEN b.date < a.date + x THEN 1 ELSE 0) AS rate
 FROM table a LEFT JOIN table b ON
-(a.actor_uid = b.target_uid AND a.target_uid = b.action_uid AND b.action='accept')
-WHERE a.action = 'send'
+(a.action = 'send' AND b.action='accept' AND
+a.actor_uid = b.target_uid AND a.target_uid = b.action_uid AND
+)
 GROUP BY date
 "
-
 accept <- filter(table, action=='accept')
 request <- filter(table, action=='send')
 left_join(request, accept, by=c('actor_uid'='target_uid', 'target_uid'='actor_uid')) %>%
@@ -478,18 +459,12 @@ left_join(request, accept, by=c('actor_uid'='target_uid', 'target_uid'='actor_ui
 
 "
 Q2: Who has the most number of friends?
-SELECT id, SUM(CASE WHEN action='accept' THEN 1 ELSE -1) AS friends
-FROM(  
-  SELECT actor_uid AS id, action FROM table WHERE action IN ('accept', 'unfriend')
-  UNION ALL
-  SELECT target_uid AS id, action FROM table WHERE action IN ('accept', 'unfriend')
-) 
-GROUP BY id
-
 "
 df <- filter(table, action %in% c('unfriend', 'accept'))
-union_all(select(df, id = actor_uid, action), select(df, id = target_uid, action))%>%
+union_all(select(df, id = actior_uid, action), select(df, id = target_uid, action))%>%
   mutate(change = ifelse(action=='accept', 1, -1)) %>%
   group_by(id) %>%
   summarise(friends = sum(change))
+    
+  summarise()
   
