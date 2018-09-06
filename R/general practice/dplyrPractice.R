@@ -8,44 +8,53 @@ Dimension-level data: a summary table with demographics for each student in the 
 student_id | school_id | grade_level | date_of_birth | hometown
 
 Using this data, you could answer questions like the following:
-    What was the overall attendance rate for the school district yesterday?
+1. What was the overall attendance rate for the school district yesterday?
 SELECT SUM(CASE WHEN a.attendance = 1 THEN 1 ELSE 0)/COUNT(b.student_id)
 FROM attendance a
 RIGHT JOIN student b ON
 (a.student_id = b.student_id)
 WHERE a.date = (GETDATE()-1)
 
-    Which grade level currently has the most students in this school district?
-SELECT TOP 1 grade_level, COUNT(student_id) AS count
-FROM student
-GROUP BY grade_level
-ORDER BY COUNT(student_id) DESC
+2. Which grade level currently has the most students in this school district?
+# use WHERE conditioning is more efficient than ORDER BY
+SELECT * FROM(
+  SELECT grade_level, COUNT(student_id) AS count
+  FROM student
+  GROUP BY grade_level
+)
+WHERE count = MAX(count)
 
-    Which school had the highest attendance rate? The lowest?
 
-SELECT TOP 1 a.school_id, SUM(CASE WHEN b.attendance=1 THEN 1 ELSE 0)/COUNT(a.student_id) AS rate
-FROM student a
-LEFT JOIN attendance b ON
-(a.student_id = b.student_id)
-GROUP BY a.school_id
-ORDER BY rate DESC|ASC
+
+3. Which school had the highest attendance rate? The lowest?
+SELECT * FROM
+(
+  SELECT a.school_id, SUM(CASE WHEN b.attendance=1 THEN 1 ELSE 0)/COUNT(DISTINCT a.student_id) AS rate
+  FROM student a
+  LEFT JOIN attendance b ON
+  (a.student_id = b.student_id)
+  GROUP BY a.school_id
+)
+WHERE rate = MAX(rate) OR rate = MIN(rate)
 "
+# 1. What was the overall attendance rate for the school district yesterday?
 att <-attendance %>% filter(date == Sys.Date()-1) %>%
   summarise(count = sum(ifelse(attendance==1, 1, 0)))
 total <- nrow(student)
 att/total
-
+# 2. Which grade level currently has the most students in this school district?
 student %>% group_by(grade_level) %>%
   summarise(count = n()) %>%
-  filter(count=max(count))
-
-attendance %>% filter(date = Sys.Date()-1) %>%
+  filter(count==max(count))
+# 3. Which school had the highest attendance rate? The lowest?
+attendance %>% filter(date == Sys.Date()-1) %>%
   right_join(student, by='student_id') %>%
   group_by(school_id) %>%
   summarise(count = n(),
             attend = sum(attendance==1),
             rate = attend/count) %>%
-  filter(rate == max(rate) & rate == min(rate))
+  filter(rate == max(rate) | rate == min(rate))
+
 "
 Q1
 t1: name, category; # player name and category 
@@ -60,20 +69,16 @@ t3 <- data.frame(id = c(1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6),
                  follower = c(2, 3, 4, 5, 6, 1, 2, 3, 4, 1, 2, 3))
 "How many followers in each category
 Discuss on duplicates if an people follows multiple players in a category
-SELECT category, COUNT(t3.follower) FROM t1
+SELECT t1.category, COUNT(t3.follower) FROM t1
 LEFT JOIN t2 ON(t1.name = t2.name)
 LEFT JOIN t3 ON(t2.id = t3.id)
 GROUP BY category
 "
-df1<-t1 %>% 
-  left_join(t2, by = 'name') %>%
+df1<- left_join(t1, t2, by = 'name') %>%
   left_join(t3, by = 'id')%>%
-  select(name, category, follower)
-
-df1 %>% group_by(category) %>%
-  summarise(
-    count = n_distinct(follower)
-  ) %>%
+  select(name, category, follower) %>%
+  group_by(category) %>%
+  summarise(count = n_distinct(follower)) %>%
   filter(category == 'NBA')
 
 "How many NBA followers also follow NFL" 
@@ -133,17 +138,19 @@ content %>% group_by(content_type) %>%
   summarise(count = n_distinct(content_id))
 
 "distribution of comments over post
+# Put condition in JOIN, 
 SELECT comments, COUNT(a.content_id) as posts FROM
 (
-SELECT a.content_id, a.content_type, COUNT(b.content_id) AS comments FROM content a
-LEFT JOIN content b ON
-(a.userid = b.target_id AND b.content_type = 'comment')
-WHERE a.content_type = 'post'
-GROUP BY a.content_id, a.content_type)
+  SELECT a.content_id, a.content_type, COUNT(b.content_id) AS comments FROM content a
+  LEFT JOIN content b ON
+  (a.userid = b.target_id AND b.content_type = 'comment')
+  WHERE a.content_type = 'post'
+  GROUP BY a.content_id, a.content_type)
+)
 GROUP BY comments
 "
 comments <- content %>% filter(content_type == 'post') %>%
-  left_join(content, by = c('target_id' = 'userid')) %>%
+  left_join(content, by = c('user_id' = 'target_id')) %>%
   group_by(content_id) %>%
   summarise(count = n_distinct(content_id.y))
 # method 1: number of posts by each comment count
@@ -160,15 +167,20 @@ ggplot(comments, aes(count))+geom_density()
 "
 Q4
 table friending：date，action{‘send’，‘accept’}，user_id，target_id
-计算acceptance rate treding by time
-每个用户能发送一次，每个用户也只能接受一次，a发了request给b，b就不能发送给a，只能接受或忽略。
+Calculate: acceptance rate treding by time
+Each user can send or receive only once. If a sent a request to b, then b is not allowed to send anthing to a before accepting or ignoring
 如果a发送request给b，b接受了才能认为是accept，否则不算。
 我当时问了时间长度的问题，被反问觉得应该选择多长的时间？
 我直觉说了一句monthly，问为什么是monthly，想了想说应该算average frequency for send or accept，再根据这个定时间。
 追问用现有表格如何算average frequency？说了一下。
 最后让用一个月为期限，算acceptance rate。
 
-// consider to use datediff(a, b) <=1
+// 
+There could be two different ways to calculate acceptance rate:
+a. group by each day, no matter when the request being accepted, the acceptance will be counted
+b. Set a condition, (usually time) only count the acceptance when the condition is met
+eg: consider to use datediff(request.date, accept.date) <=1
+
 SELECT a.date, COUNT(a.user_id) AS total, SUM(CASE WHEN (date.accept-date.send <= 1) THEN 1 ELSE 0) AS accept, accept/total AS rate
 FROM (
   SELECT a.user_id, b.user_id, a.date AS date.send, b.date AS date.accept 
@@ -189,7 +201,8 @@ left_join(request, accept, by = c('target_id' = 'user_id', 'user_id' = 'target_i
   mutate(success = (!is.na(date.accpet)) & ((date.accpet -date.send) <= time.window) ) %>%
   group_by(date.send) %>%
   summarise(request.total = n(),
-            accept.total = sum(success))
+            accept.total = sum(success),
+            rate = accept.total/request.total)
 
 "
 Q5
@@ -237,8 +250,10 @@ FROM(
 )
 WHERE rank = 1
 "
+# Get the most recent status of users, if last status is not 'accept' then not friend
 union_all(tb1, tb2) %>% group_by(user1) %>%
-  filter(date = max(date))
+  filter(date = max(date)) %>%
+  mutate(friend = ifelse(action=='accept', 'yes', 'no'))
 
 "
 Q: 7
@@ -266,7 +281,7 @@ GROUP BY yearmonth, status
 
 "
 
-library(lubridate)
+library(lubridate) # date process library
 log<- mutate(log, month = month(act_time)) %>% group_by(userid, month) %>%
   summarise(count=n())
 last_month <- filter(log, month==(month(Sys.Date()-1)))
