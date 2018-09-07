@@ -244,11 +244,22 @@ union_all(tb1, tb2) %>% group_by(user1) %>%
 how to decide if 2 people are friends or NOT
 SELECT userid, target_id, action, ROW_NUMBER() OVER(PARTITION BY userid, target_id ORDER BY date DESC) AS rank
 FROM(
-  SELECT userid, target_id, action FROM table WHERE action IN ('accpet', 'unfriend)
+  SELECT userid, target_id, date, action FROM table WHERE action IN ('accpet', 'unfriend)
   UNION ALL
-  SELECT target_id, userid, action FROM table WHERE action IN ('accept', 'unfriend')
+  SELECT target_id, userid, date, action FROM table WHERE action IN ('accept', 'unfriend')
 )
 WHERE rank = 1
+
+
+# Could this be OK?
+SELECT userid, target_id, date, action, MAX(date) AS max_date
+FROM(
+  SELECT userid, target_id, date, action FROM table WHERE action IN ('accpet', 'unfriend)
+  UNION ALL
+  SELECT target_id, userid, date, action FROM table WHERE action IN ('accept', 'unfriend')
+)
+GROUP BY userid, target_id
+HAVING MAX(date) = date
 "
 # Get the most recent status of users, if last status is not 'accept' then not friend
 union_all(tb1, tb2) %>% group_by(user1) %>%
@@ -458,7 +469,7 @@ action = {'send_request', 'accept_request', 'unfriend'}
 actor_uid = the person who takes the action
 
 Q1: How is the overall friending acceptance rate changing over time?
-SELECT date, COUNT(b.actor_uid)/SUM(CASE WHEN b.date < a.date + x THEN 1 ELSE 0) AS rate
+SELECT date, COUNT(b.actor_uid)/SUM(CASE WHEN b.date < a.date + x THEN 1 ELSE 0 END) AS rate
 FROM table a LEFT JOIN table b ON
 (a.action = 'send' AND b.action='accept' AND
 a.actor_uid = b.target_uid AND a.target_uid = b.action_uid AND
@@ -474,12 +485,22 @@ left_join(request, accept, by=c('actor_uid'='target_uid', 'target_uid'='actor_ui
 
 "
 Q2: Who has the most number of friends?
+SELECT * FROM
+(
+  SELECT actor_uid, SUM(CASE WHEN action='accept_request' THEN 1 ELSE -1 END) AS friends
+  FROM
+    (SELECT actor_uid, target_uid, action FROM table WHERE action IN ('accept_request', 'unfriend')
+    UNION ALL
+    SELECT target_uid, actor_uid, action FROM table WHERE action IN ('accept_request', 'unfriend'))
+  GROUP BY actor_uid
+)
+WHERE friends = MAX(friends)
 "
 df <- filter(table, action %in% c('unfriend', 'accept'))
 union_all(select(df, id = actior_uid, action), select(df, id = target_uid, action))%>%
   mutate(change = ifelse(action=='accept', 1, -1)) %>%
   group_by(id) %>%
-  summarise(friends = sum(change))
-    
-  summarise()
+  summarise(friends = sum(change)) %>%
+  filter(friends == max(friends))
+
   
