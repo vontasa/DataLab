@@ -158,6 +158,14 @@ head(round(M,2))
 corrplot(M, method="color", type ="upper", tl.srt=45, tl.col="black",diag=FALSE,addCoef.col = "black")
 
 # ---------------------------
+# T-test
+# ---------------------------
+
+# Control group is non 'setosa', treatment group is 'setosa'
+x<-iris[which(iris$Species=='setosa'),]$Sepal.Length
+y<-iris[-which(iris$Species=='setosa'),]$Sepal.Length
+t.test(x, y)
+# ---------------------------
 # Prediction
 # ---------------------------
 # Prediction formular
