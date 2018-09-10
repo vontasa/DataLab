@@ -251,15 +251,26 @@ FROM(
 WHERE rank = 1
 
 
-# Could this be OK?
-SELECT userid, target_id, date, action, MAX(date) AS max_date
+# Or calculate the max date and join to findthe 
+SELECT userid, target_id, date, action
 FROM(
   SELECT userid, target_id, date, action FROM table WHERE action IN ('accpet', 'unfriend)
   UNION ALL
   SELECT target_id, userid, date, action FROM table WHERE action IN ('accept', 'unfriend')
-)
-GROUP BY userid, target_id
-HAVING MAX(date) = date
+) a
+LEFT JOIN (
+  SELECT userid, target_id,MAX(date) AS max_date
+  FROM(
+  SELECT userid, target_id, date, action FROM table WHERE action IN ('accpet', 'unfriend)
+  UNION ALL
+  SELECT target_id, userid, date, action FROM table WHERE action IN ('accept', 'unfriend')
+  )
+  GROUP BY userid, target_id
+) b ON
+(a.userid = b.userid AND a.target_id = b.target_id)
+WHERE a.date = b.max_date
+
+
 "
 # Get the most recent status of users, if last status is not 'accept' then not friend
 union_all(tb1, tb2) %>% group_by(user1) %>%
