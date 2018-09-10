@@ -434,6 +434,12 @@ group_by(log, id1, id2)%>%
   summarise(friends = n_distinct(id2)) %>%
   arrange(desc(friends)) %>% slice(1)
 # OR filter(friends == max(friends))
+# Method 2:
+group_by(log, id1, id2) %>%
+  filter(date == max(date) && type == 'accept') %>%
+  group_by(id) %>%
+  summarise(count = n()) %>%
+  filter(count == max(count))
 
 "
 Table {date, u1, u2, n_msg}
@@ -480,19 +486,24 @@ action = {'send_request', 'accept_request', 'unfriend'}
 actor_uid = the person who takes the action
 
 Q1: How is the overall friending acceptance rate changing over time?
-SELECT date, COUNT(b.actor_uid)/SUM(CASE WHEN b.date < a.date + x THEN 1 ELSE 0 END) AS rate
+
+# Aggregation funtion in SQL ignores the null value
+SELECT date, SUM(CASE WHEN b.date < a.date + x THEN 1 ELSE 0 END)/COUNT(b.actor_uid) AS rate
 FROM table a LEFT JOIN table b ON
-(a.action = 'send' AND b.action='accept' AND
-a.actor_uid = b.target_uid AND a.target_uid = b.action_uid AND
-)
+(b.action='accept' AND a.actor_uid = b.target_uid AND a.target_uid = b.action_uid)
+WHERE a.action = 'send'
 GROUP BY date
 "
-accept <- filter(table, action=='accept')
-request <- filter(table, action=='send')
+
+# date.y contains NA, sum a vector with NA = NA. need to
+# add na remove in filter or use na.omit
+accept <- filter(table, action=='accept' & !is.na(action))
+request <- filter(table, action=='send') %>%
+  na.omit()
 left_join(request, accept, by=c('actor_uid'='target_uid', 'target_uid'='actor_uid')) %>%
-  mutate(overtime = (date.y-date.x>=max_time)) %>%
+  mutate(overtime = (date.y-date.x>=max_time) | is.na(date.y)) %>%
   group_by(date)%>%
-  summarise(rate = sum(!overtime)/n())
+  summarise(rate = sum(!overtime)/n())                                                                                               
 
 "
 Q2: Who has the most number of friends?
