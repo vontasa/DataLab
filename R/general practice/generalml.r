@@ -164,7 +164,14 @@ corrplot(M, method="color", type ="upper", tl.srt=45, tl.col="black",diag=FALSE,
 # Control group is non 'setosa', treatment group is 'setosa'
 x<-iris[which(iris$Species=='setosa'),]$Sepal.Length
 y<-iris[-which(iris$Species=='setosa'),]$Sepal.Length
+# Simple two vectors
 t.test(x, y)
+# Use formula: dependent var ~ dependent var with excat 2 groups
+t.test(Sepal.Length~isSetosa, mutate(iris, isSetosa = (Species=='setosa')))
+# single side test H1: x is LESS than y. Positive
+t.test(x, y, alternative = 'less')
+# single side test H1: x is GREATER than y. Negative
+t.test(x, y, alternative = 'greater')
 # ---------------------------
 # Prediction
 # ---------------------------
