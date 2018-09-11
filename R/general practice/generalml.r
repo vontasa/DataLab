@@ -172,6 +172,8 @@ t.test(Sepal.Length~isSetosa, mutate(iris, isSetosa = (Species=='setosa')))
 t.test(x, y, alternative = 'less')
 # single side test H1: x is GREATER than y. Negative
 t.test(x, y, alternative = 'greater')
+# Paired t.test. if x and y has same length and the result is 1-to-1, paired t-test is considered due to better blocking
+t.test(x, x+runif(length(x), 0.3, 3), paired = T)
 # ---------------------------
 # Prediction
 # ---------------------------
