@@ -1,0 +1,335 @@
+---
+title: "SurveyAnalysis"
+author: "Edward"
+date: "August 28, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Sales Rep Survey Analysis
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r include = FALSE}
+
+##############
+raw<-read.csv('A:\\Teams\\SWAT\\Survey and Segmentation\\Rep survey and segmentation\\RepSurveyResultsAndCustomerAttributesVERTICAL.csv')
+raw<-raw[,c(1:13, 30:ncol(raw))]
+
+df<-raw[,c("SoldTo.Number", "SoldTo.Name", "IsDMG", "InLimitedDataset",
+          "QuestionNumber",
+          "QuestionDesc",
+          "Product",
+          "AnswerDesc",
+          "Med.Surg_Cur3MonthAnnCAH",
+          "Med.Surg_Cur3MonthAnnConvertible",
+          "Med.Surg_PriorYr3MonthAnnCah",
+          "Med.Surg_PriorYr3MonthAnnConvertible",
+          "ProductSpecificCur3MonthAnnCAH",                 
+          "ProductSpecificCur3MonthAnnConvertible",          
+          "ProductSpecificPriorYr3MonthAnnCAH",    
+          "ProductSpecificPriorYr3MonthAnnConvertible"
+          )]
+# column id range by type of information
+
+questlist<-list()
+attach(df)
+df$CAHSalesGrowth<-(ProductSpecificCur3MonthAnnCAH-ProductSpecificPriorYr3MonthAnnCAH)/ProductSpecificPriorYr3MonthAnnCAH
+df$CAHPenetration<-ProductSpecificCur3MonthAnnCAH/(ProductSpecificCur3MonthAnnCAH+ProductSpecificCur3MonthAnnConvertible)
+df$CAHPenetrationPrior<-ProductSpecificPriorYr3MonthAnnCAH/(ProductSpecificPriorYr3MonthAnnCAH+ProductSpecificPriorYr3MonthAnnConvertible)
+df$CAHPenetrationGrowth<-(df$CAHPenetration-df$CAHPenetrationPrior)/df$CAHPenetrationPrior
+  
+prodGroup<-unique(df$Product)
+
+library(gridExtra)
+library(grid)
+library(ggplot2)
+```
+
+## Impact of different roles
+
+### Influence of the Primary Decision Maker
+
+#### Which decision maker impact the most on sales performance
+Here is the **CAH brand sales growth** distribution by different primary decision maker:
+```{r pressure, echo=FALSE}
+q<-1
+p=list()
+for (g in 1:4){
+  qi_df<-subset(df, QuestionNumber==q & Product==prodGroup[g] & 
+                  InLimitedDataset=='True' & 
+                  IsDMG == 'False' &
+                  CAHSalesGrowth<=1 & CAHSalesGrowth>=0)
+  summary(lm(CAHSalesGrowth~AnswerDesc, data=qi_df))
+  p[[g]]<-ggplot(data = qi_df, aes(CAHSalesGrowth, fill=AnswerDesc, colour = AnswerDesc))+
+    geom_density(alpha = 0.1)+
+    labs(caption = prodGroup[g])
+}
+grid.arrange(p[[1]], p[[2]], p[[3]], p[[4]], ncol = 2, nrow = 2)
+#p[[1]]+xlab("Annual CAH Sales Growth")
+```
+
+### Different Customer Traits
+#### Q5: Is CAH one of the preferred strategic partners?
+Test the whether the customers see CAH as preferred strategic partner have better performance.
+```{r, echo=FALSE}
+# Q5 Test on CAH sales growth
+q=5
+g=1
+qi_df<-subset(df, QuestionNumber==q & 
+                CAHSalesGrowth<=1 &
+                !is.null(AnswerDesc) &
+                (AnswerDesc == "Yes" | AnswerDesc == "No") &
+                IsDMG == 'False')
+
+p<-ggplot(data = qi_df, aes(CAHSalesGrowth, fill=AnswerDesc, colour = AnswerDesc))+
+  geom_density(alpha = 0.1)
+p
+```
+
+The customers who see CAH as preferred partner show positive impact on YoY CAH sales growth. 
+$$ p-value = `r summary(lm(CAHSalesGrowth~AnswerDesc,data=qi_df))$coefficients[2,4]` $$
+
+Impact on CAH in-channel penetration YoY growth:
+
+```{r, echo=FALSE}
+# Q5 Test on CAH sales growth
+qi_df<-subset(df, QuestionNumber==q & 
+                CAHPenetrationGrowth>=-2 & CAHPenetrationGrowth<=2 &
+                !is.null(AnswerDesc) &
+                (AnswerDesc == "Yes" | AnswerDesc == "No") &
+                IsDMG == 'False')
+p<-ggplot(data = qi_df, aes(CAHPenetrationGrowth, fill=AnswerDesc, colour = AnswerDesc))+
+  geom_density(alpha = 0.1)
+p
+```
+The customers who see CAH as preferred partner doesn't show significant impact on YoY CAH in-channel penetration growth. 
+$$ p-value = `r summary(lm(CAHSalesGrowth~AnswerDesc,data=qi_df))$coefficients[2,4]` $$
+
+#### Q7: Is the customer *ideal to grow* perception truly relect the performance?
+Test whether the in-channel penetration ties to the *ideal-to-grow* perception.
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Put several responses as attributes
+# CAH preferred, Ideal-to-grow, Prim
+# Response from Q_5, Q_7, Q_14
+q5_df<-subset(df, QuestionNumber==5 & !is.null(AnswerDesc))
+q7_df<-subset(df, QuestionNumber==7 & !is.null(AnswerDesc))
+q14_df<-subset(df, QuestionNumber==14 & !is.null(AnswerDesc))
+library(dplyr)
+adj_df<-left_join(df, q5_df[,c("SoldTo.Number", "AnswerDesc")], by = "SoldTo.Number")
+colnames(adj_df)[21]<-"CAHPreferred"
+colnames(adj_df)[6]<-"QuestionDesc"
+colnames(adj_df)[8]<-"AnswerDesc"
+adj_df<-left_join(adj_df, q7_df[,c("SoldTo.Number", "AnswerDesc")], by = "SoldTo.Number")
+colnames(adj_df)[22]<-"IdealtoGrow"
+colnames(adj_df)[6]<-"QuestionDesc"
+colnames(adj_df)[8]<-"AnswerDesc"
+adj_df<-left_join(adj_df, q14_df[,c("SoldTo.Number", "AnswerDesc")], by = "SoldTo.Number")
+colnames(adj_df)[23]<-"Prim"
+colnames(adj_df)[6]<-"QuestionDesc"
+colnames(adj_df)[8]<-"AnswerDesc"
+```
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+q7_df<-subset(adj_df, QuestionNumber==7 & !is.null(AnswerDesc) &
+               (AnswerDesc=="Definitely yes" |
+                AnswerDesc=="Definitely not") &
+                IsDMG=='False')
+q7_df$AnswerDesc<-as.character(q7_df$AnswerDesc)
+idealtoGrowScale<-5:0
+names(idealtoGrowScale)<-c("Definitely yes", 
+                    "Probably yes",
+                    "May or may not be",
+                    "Probably not",
+                    "Definitely yes",
+                    "Do not have enough information to answer")
+
+q7_df$AnswerValue<-idealtoGrowScale[q7_df$AnswerDesc] 
+# Test by using Komogrov
+x<-subset(q7_df, AnswerDesc=="Definitely yes")$CAHPenetration
+y<-subset(q7_df, AnswerDesc=="Definitely not")$CAHPenetration
+
+p_all<-ggplot(data = q7_df, aes(CAHPenetration, fill=AnswerDesc, colour = AnswerDesc))+
+  geom_density(alpha = 0.3,adjust=1)+
+  xlab("In-Channel Penetration for all")+
+  xlim(0,1)
+# Select customers using CAH as primary vendor
+q7_df<-subset(adj_df, QuestionNumber==7 & !is.null(AnswerDesc) &
+               (AnswerDesc=="Definitely yes" |
+                AnswerDesc=="Definitely not") &
+                Prim=='Cardinal Health' &
+                IsDMG=='False')
+p_prim<-ggplot(data = q7_df, aes(CAHPenetration, fill=AnswerDesc, colour = AnswerDesc))+
+  geom_density(alpha = 0.3,adjust=1)+
+  xlab("In-Channel Penetration when CAH is primary")+
+  xlim(0,1)
+grid.arrange(p_all, p_prim, ncol = 2, nrow = 1)
+```
+
+The **ideal to grow** type is related to the performance. The customers who are rated as *"Defintiely yes"* has higher CAH in-channel penetration. 
+$$ p-value = `r ks.test(x[!is.na(x)],y[!is.na(y)], alternative = "less")$p.value` $$
+
+#### Q15 vs Q7: Whether ideal-to-grow has anything to do with customers' age
+The plot shows customer distribution based on the years with CAH brand and distribution. Overall, the portion of *"Ideal to grow"* customer is larger among high age customer group than newer ones. This is true for both the age of buying CAH brand and age as distribution customer.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Q15 vs Q7 Test aroud years with CAH vs Ideal-to-grow perception
+q15_df<-subset(adj_df, QuestionNumber==15 & 
+                 !is.null(IdealtoGrow) &
+                 (IdealtoGrow=="Definitely yes" |
+                    IdealtoGrow=="Definitely not" 
+                    #IdealtoGrow=="Probably yes" |
+                    ) &
+                 !is.null(AnswerDesc))
+q15_df$AnswerDesc<-as.numeric(gsub("([0-9]+).*$", "\\1", q15_df$AnswerDesc))
+q15_df$IdealtoGrow<-as.factor(as.character(q15_df$IdealtoGrow))
+# by year of buying CAH product
+q15_buyBrand_df<-subset(q15_df, QuestionDesc=="YearsBuyingCahBrand" & AnswerDesc<40)
+
+p1<-ggplot(data = q15_buyBrand_df, aes(AnswerDesc, fill=IdealtoGrow, colour = IdealtoGrow))+
+  geom_density(alpha = 0.3, adjust=1.5)+
+  xlab("Years buying CAH Brand")
+
+# by years as distribution customer
+q15_distribution_df<-subset(q15_df, QuestionDesc=="YearsAsDistributionCustomer" & AnswerDesc<40)
+
+p2<-ggplot(data = q15_distribution_df, aes(AnswerDesc, fill=IdealtoGrow, colour = IdealtoGrow))+
+  geom_density(alpha = 0.3,adjust=1.5)+
+  xlab("Years as distribution customer")
+grid.arrange(p1, p2, ncol = 2, nrow = 1)
+```
+
+Years as distribution customer vs *is ideal to grow*
+$$ p-value = `r summary(lm(AnswerDesc~IdealtoGrow,data=q15_buyBrand_df, na.action = na.omit))$coefficients[2,4]` $$
+Years buying CAH brand vs *is deal to grow*
+$$ p-value = `r summary(lm(AnswerDesc~IdealtoGrow,data=q15_distribution_df, na.action =na.omit))$coefficients[2,4]` $$
+
+More over, we would like to test the dynamics of *ideal-to-grow* vs *primary vendor*
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+q15_buyBrand_df<-subset(q15_df, 
+                        QuestionDesc=="YearsBuyingCahBrand" & 
+                        AnswerDesc<50 &
+                        Prim == "Cardinal Health")
+x<-subset(q15_buyBrand_df, IdealtoGrow=="Definitely yes")$AnswerDesc
+y<-subset(q15_buyBrand_df, IdealtoGrow=="Definitely not")$AnswerDesc
+x<-x[!is.na(x)]
+y<-y[!is.na(y)]
+ks_cah<-t.test(x,y)
+p_cah<-ggplot(data = q15_buyBrand_df, aes(AnswerDesc, fill=IdealtoGrow, colour = IdealtoGrow))+
+  geom_density(alpha = 0.3, adjust=1.5)+
+  xlab(paste("Years buying CAH Brand \n(CAH as the primary vendor) \n average age difference: ", round(ks_cah$estimate[1]-ks_cah$estimate[2],1)))
+
+q15_buyBrand_df<-subset(q15_df, 
+                        QuestionDesc=="YearsBuyingCahBrand" & 
+                          AnswerDesc<50 &
+                          Prim!= "Cardinal Health")
+x<-subset(q15_buyBrand_df, IdealtoGrow=="Definitely yes")$AnswerDesc
+y<-subset(q15_buyBrand_df, IdealtoGrow=="Definitely not")$AnswerDesc
+x<-x[!is.na(x)]
+y<-y[!is.na(y)]
+ks_other<-t.test(x,y)
+p_other<-ggplot(data = q15_buyBrand_df, aes(AnswerDesc, fill=IdealtoGrow, colour = IdealtoGrow))+
+  geom_density(alpha = 0.3, adjust=1.5)+
+  xlab(paste("Years buying CAH Brand \n(Other vendor as the primary vendor) \n average age difference: ", round(ks_other$estimate[1]-ks_other$estimate[2],1)))
+grid.arrange(p_cah, p_other, ncol = 2, nrow = 1)
+
+```
+
+Overall, *the ideal-to-grow* customers show different patterns on age. Higher the age, more likely to be perceived as *ideal-to-grow* by sales rep. This is true no matter the primary vendor is CAH or not. However, in average, if CAH as the primary vendor, aged customer tend to be more likely to be *ideal-to-grow*.
+P-value if CAH is the primary vendor
+$$ p-value = `r ks_cah$p.value` $$
+P-value if other vendor as the primary vendor
+$$ p-value = `r ks_other$p.value` $$
+
+
+#### Q15: Years with CAH vs performance
+In this test, only non-DMG sold-to is included. It shows if CAH as the primary vendor, then the customers:
+* Buy way more CAH brand and also grow faster
+* In-channel penetration grows faster
+
+```{r echo=F, message=FALSE, warning=FALSE}
+q15_df<-subset(adj_df, QuestionNumber==15 &
+                 IsDMG=="False" &
+                 !is.null(IdealtoGrow) &
+                 !is.null(AnswerDesc))
+q15_df$AnswerDesc<-as.numeric(gsub("([0-9]+).*$", "\\1", q15_df$AnswerDesc))
+q15_buyBrand_df<-subset(q15_df, 
+                        QuestionDesc=="YearsBuyingCahBrand" & 
+                          AnswerDesc<50 &
+                          CAHPenetration>=0
+                          )
+p_pen2year<-ggplot(data = q15_buyBrand_df,aes(x=AnswerDesc, y=CAHPenetration))+
+  geom_jitter(aes(colour=(Prim=='Cardinal Health')), size=3, alpha=0.3, width=2)+
+  geom_smooth(aes(colour=(Prim=='Cardinal Health')),method='glm', na.rm=T)+
+  ylim(0,1)+
+  xlab("Years buying CAH Brand")+
+  ylab("CAH Brand In-channel Penetration")+
+  guides(colour = guide_legend(title = "Primary Vendor"))
+pen_prim_growth<-summary(lm(CAHPenetration~AnswerDesc,data=subset(q15_buyBrand_df,Prim=='Cardinal Health'), na.action = na.omit))$coefficients[2,1]
+pen_other_growth<-summary(lm(CAHPenetration~AnswerDesc,data=subset(q15_buyBrand_df,Prim!='Cardinal Health'), na.action = na.omit))$coefficients[2,1]
+
+p_cah2year<-ggplot(data = q15_buyBrand_df,aes(x=AnswerDesc, y=Med.Surg_Cur3MonthAnnCAH))+
+  geom_jitter(aes(colour=(Prim=='Cardinal Health')), size=3, alpha=0.3, width=2)+
+  geom_smooth(aes(colour=(Prim=='Cardinal Health')),method='glm')+
+  ylim(0,2000000)+
+  xlab("Years buying CAH Brand")+
+  ylab("CAH Brand Annualized Sales")+
+  guides(colour = guide_legend(title = "CAH as Prime"))
+grid.arrange(p_pen2year, p_cah2year, ncol = 2, nrow = 1)
+library(scales)
+```
+
+The penetrationgrowth rate is estimated as:
+
+$$
+\mathcal{\text{Growth rate}} =
+  \begin{cases}
+    \text{0.5%} & \text{if CAH as prime vendor $i = j$ and $deg_j \neq 0 $} \\
+    \\
+    \text{0.01%} & \text{otherwise}
+  \end{cases}
+$$
+
+#### Q8 Likely to convert
+We look into how in-channel penetation varies amond products and likely-to-convert perception. Define the two-factor design as:
+
+$$ penetration ~ likely + product + product*likely $$
+
+The interaction plot is as below:
+
+```{r echo=F, message=FALSE, warning=FALSE}
+test_df<-subset(df, Product!="")[,c('SoldTo.Number', 
+                                    'Product',
+                                    'ProductSpecificCur3MonthAnnCAH',
+                                    'ProductSpecificCur3MonthAnnConvertible')]
+prod_df<-unique(test_df)
+prod_df$Penetration<-prod_df$ProductSpecificCur3MonthAnnCAH/(prod_df$ProductSpecificCur3MonthAnnCAH+prod_df$ProductSpecificCur3MonthAnnConvertible)
+prod_df<-prod_df[,c(1,2,5)]
+q8_df<-subset(adj_df, QuestionNumber==8 &
+                IsDMG == "False" &
+                AnswerDesc!="Do not have enough information to answer")
+adj_q8<-left_join(prod_df, q8_df[,c("SoldTo.Number", "AnswerDesc")], by = "SoldTo.Number")
+adj_q8$Penetration[is.infinite(adj_q8$Penetration)]<-NA
+adj_q8<-adj_q8[!is.na(adj_q8$Penetration),]
+
+adj_q8<-subset(adj_q8, Product %in% prodGroup[1:4] & !is.na(AnswerDesc))
+adj_q8$Product<-factor(as.character(adj_q8$Product))
+adj_q8$AnswerDesc<-factor(as.character(adj_q8$AnswerDesc), 
+                          levels=c("Not at all likely", "Slightly likely", "Somewhat likely", "Moderately likely", "Very likely"))
+
+ggplot(adj_q8,aes(x = AnswerDesc, color = Product, group = Product, y = Penetration)) +
+  stat_summary(fun.y = median, geom = "point", size=3) +
+  stat_summary(fun.y = median, geom = "line", size=1)
+```
+
+*Product* and the interaction of *Product* and *Likely-to-convert* is significant to penetration.
+```{r}
+summary(aov(Penetration~AnswerDesc*Product, data=adj_q8))
+```
+We 
