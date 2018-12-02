@@ -1,0 +1,25 @@
+library(quantmod)
+library(xts)
+library(rvest)
+library(tidyverse)
+library(stringr)
+library(forcats)
+library(lubridate)
+library(plotly)
+library(dplyr)
+library(PerformanceAnalytics)
+library(zoo)
+
+# Technical analysis
+getSymbols("AMZN",from="2018-01-01",to="2018-11-21")
+AMZN_log_returns<-AMZN%>%Ad()%>%dailyReturn(type='log')
+AMZN%>%Ad()%>%chartSeries()
+AMZN%>%chartSeries(TA='addBBands();addVo();addMACD()',subset='2018')
+
+# stock correlation
+library(PerformanceAnalytics)
+getSymbols("GOOGL",from="2018-01-01",to="2018-11-21")
+getSymbols("AAPL",from="2018-01-01",to="2018-11-21")
+getSymbols("FB",from="2018-01-01",to="2018-11-21")
+data<-cbind(diff(log(Cl(AMZN))),diff(log(Cl(GOOGL))),diff(log(Cl(AAPL))),diff(log(Cl(FB))))
+chart.Correlation(data)
