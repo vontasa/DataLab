@@ -1,5 +1,6 @@
 library(dplyr)
 # Facebook mock interview
+# Examples in this doc is for demo purpose. Doesn't gurantee executible. 
 "
 Event-level data: an attendance log for every student in a school district
 date | student_id | attendance
